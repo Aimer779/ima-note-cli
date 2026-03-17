@@ -117,7 +117,6 @@ When the user is in a local checkout and prefers not to install globally, replac
 - If the user wants `.env`, remind them that the CLI only reads `.env` from the current working directory.
 - If Windows terminals throw `'gbk' codec can't encode character ...`, explain that the terminal is using `GBK` while note output contains emoji or other non-GBK characters.
 - For that encoding problem on Windows, suggest this order:
-  - Run `chcp 65001`
   - Set PowerShell session variables: `$env:PYTHONUTF8="1"` and `$env:PYTHONIOENCODING="utf-8"`
   - Or in CMD: `set PYTHONUTF8=1` and `set PYTHONIOENCODING=utf-8`
   - Retry with a minimal command such as `ima-note search "coding"`
