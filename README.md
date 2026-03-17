@@ -1,93 +1,110 @@
 # ima-note-cli
 
-`ima-note-cli` is a small Python CLI for the IMA note OpenAPI. The MVP focuses on two workflows from `skills/ima-note`:
+`ima-note-cli` 是一个基于 Python 的命令行工具，用于通过 IMA OpenAPI 搜索和读取个人笔记。
 
-- Search notes by title
-- Read a note's plain-text content by `doc_id`
+当前 MVP 支持两个核心流程：
 
-## Installation
+- 按标题搜索笔记
+- 按 `doc_id` 读取笔记纯文本内容
 
-Using `uv`:
+## 安装
+
+推荐使用 `uv`：
 
 ```bash
+uv venv
 uv pip install -e .
 ```
 
-Using `pip`:
+如果只想临时运行，也可以直接使用 `uv run`，不强依赖全局安装。
+
+如果你更偏好 `pip`：
 
 ```bash
 pip install -e .
 ```
 
-## Credentials
+## 凭证配置
 
-The CLI reads credentials from:
+CLI 会按下面顺序读取凭证：
 
-1. Project root `.env`
-2. Process environment variables
+1. 项目根目录的 `.env`
+2. 进程环境变量
 
-Environment variables always win over `.env` values.
+如果两者同时存在，环境变量优先。
 
-Required keys:
+必需字段：
 
 ```bash
 IMA_OPENAPI_CLIENTID=your_client_id
 IMA_OPENAPI_APIKEY=your_api_key
 ```
 
-This repo now includes:
+仓库中包含：
 
-- `.env.example`: a committed template
-- `.env`: a local placeholder file for development
+- `.env.example`：提交到仓库的模板文件
+- `.env`：本地开发占位文件
 
-Recommended setup:
+推荐流程：
 
 ```bash
 cp .env.example .env
 ```
 
-Then update `.env` with the credentials from `https://ima.qq.com/agent-interface`.
+然后把 `.env` 中的占位值替换为你在 `https://ima.qq.com/agent-interface` 获取到的真实凭证。
 
-Example `.env`:
+示例：
 
 ```dotenv
 IMA_OPENAPI_CLIENTID=your_client_id
 IMA_OPENAPI_APIKEY=your_api_key
 ```
 
-## Usage
+## 用法
 
-Search notes by title:
-
-```bash
-ima-note search "会议纪要"
-```
-
-Read a note by `doc_id`:
+查看帮助：
 
 ```bash
-ima-note get "your_doc_id"
+uv run ima-note --help
 ```
 
-Get JSON output:
-
-```bash
-ima-note search "会议纪要" --json
-ima-note get "your_doc_id" --json
-```
-
-You can also run the CLI without installing it globally:
+按标题搜索笔记：
 
 ```bash
 uv run ima-note search "会议纪要"
-python -m ima_note_cli get "your_doc_id"
 ```
 
-## Development
-
-Run tests:
+读取指定笔记正文：
 
 ```bash
-$env:PYTHONPATH="src"
-python -m unittest discover -s tests -v
+uv run ima-note get "your_doc_id"
+```
+
+输出 JSON：
+
+```bash
+uv run ima-note search "会议纪要" --json
+uv run ima-note get "your_doc_id" --json
+```
+
+也可以直接运行模块入口：
+
+```bash
+uv run python -m ima_note_cli search "会议纪要"
+uv run python -m ima_note_cli get "your_doc_id"
+```
+
+## 开发
+
+运行测试：
+
+```bash
+uv run python -m unittest discover -s tests -v
+```
+
+如果已经安装为可执行命令，也可以直接运行：
+
+```bash
+ima-note search "会议纪要"
+ima-note get "your_doc_id"
 ```

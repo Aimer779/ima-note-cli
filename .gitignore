@@ -1,12 +1,14 @@
 .env
 .venv/
 venv/
+.python-version
 __pycache__/
 *.py[cod]
 *.pyo
 *.pyd
 .pytest_cache/
 .mypy_cache/
+.ruff_cache/
 .coverage
 .coverage.*
 htmlcov/
