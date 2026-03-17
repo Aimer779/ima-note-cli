@@ -4,6 +4,7 @@
 
 当前 MVP 支持两个核心流程：
 
+- 检查当前 IMA 凭证是否已配置
 - 按标题搜索笔记
 - 按 `doc_id` 读取笔记纯文本内容
 
@@ -66,6 +67,13 @@ IMA_OPENAPI_APIKEY=your_api_key
 
 ```bash
 uv run ima-note --help
+```
+
+检查凭证配置：
+
+```bash
+uv run ima-note auth
+uv run ima-note auth --json
 ```
 
 按标题搜索笔记：

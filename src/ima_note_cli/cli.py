@@ -9,7 +9,7 @@ import sys
 from typing import Sequence
 
 from .api import ApiError, ImaNoteApiClient, SearchResult
-from .config import ConfigError, load_credentials
+from .config import ConfigError, CredentialStatus, inspect_credentials, load_credentials
 
 
 HTML_TAG_RE = re.compile(r"<[^>]+>")
@@ -21,6 +21,14 @@ def build_parser() -> argparse.ArgumentParser:
         description="Search and read IMA notes from the command line.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    auth_parser = subparsers.add_parser("auth", help="Check whether IMA credentials are configured.")
+    auth_parser.add_argument(
+        "--json",
+        action="store_true",
+        dest="as_json",
+        help="Print structured JSON instead of human-readable output.",
+    )
 
     search_parser = subparsers.add_parser("search", help="Search notes by title.")
     search_parser.add_argument("query", help="Title query to search for.")
@@ -54,6 +62,11 @@ def run(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
+        status = inspect_credentials(Path.cwd())
+
+        if args.command == "auth":
+            return _handle_auth(status, args.as_json)
+
         credentials = load_credentials(Path.cwd())
         client = ImaNoteApiClient(credentials)
 
@@ -67,6 +80,45 @@ def run(argv: Sequence[str] | None = None) -> int:
 
     parser.error("Unknown command")
     return 2
+
+
+def _handle_auth(status: CredentialStatus, as_json: bool) -> int:
+    payload = {
+        "configured": status.is_configured,
+        "credentials": {
+            "IMA_OPENAPI_CLIENTID": {
+                "set": bool(status.client_id),
+                "source": status.client_id_source,
+            },
+            "IMA_OPENAPI_APIKEY": {
+                "set": bool(status.api_key),
+                "source": status.api_key_source,
+            },
+        },
+    }
+
+    if as_json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0 if status.is_configured else 1
+
+    print(f"Status: {'configured' if status.is_configured else 'missing credentials'}")
+    print(
+        "IMA_OPENAPI_CLIENTID: "
+        f"{'set' if status.client_id else 'missing'}"
+        f"{_format_source_suffix(status.client_id_source)}"
+    )
+    print(
+        "IMA_OPENAPI_APIKEY: "
+        f"{'set' if status.api_key else 'missing'}"
+        f"{_format_source_suffix(status.api_key_source)}"
+    )
+
+    if status.is_configured:
+        return 0
+
+    print()
+    print("Configure the missing values in the environment or a project-root .env file.", file=sys.stderr)
+    return 1
 
 
 def _handle_search(client: ImaNoteApiClient, query: str, limit: int, as_json: bool) -> int:
@@ -152,3 +204,9 @@ def _format_timestamp(timestamp_ms: int | None) -> str:
         return ""
     dt = datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc).astimezone()
     return dt.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _format_source_suffix(source: str | None) -> str:
+    if not source:
+        return ""
+    return f" ({source})"
