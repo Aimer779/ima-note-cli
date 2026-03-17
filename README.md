@@ -4,6 +4,18 @@
 
 本项目参考了公开 skill：<https://clawhub.ai/iampennyli/ima-skills>，并结合仓库内的 `skills/ima-note` 实现当前的 IMA 笔记 CLI。
 
+## Skills
+
+本项目自带两个相关 skill，建议优先从这里开始：
+
+- `skills/ima-note-cli`：用于指导 `ima-note` 的安装、验证、凭证配置和常用命令使用
+- `skills/ima-note`：用于提供 IMA 笔记 OpenAPI 的接口能力说明和字段参考
+
+典型分工：
+
+- 需要安装 CLI、排查 `uv tool`、验证 `ima-note auth`：用 `ima-note-cli`
+- 需要理解笔记接口、参数、返回结构和工作流：用 `ima-note`
+
 当前已支持这些能力：
 
 - 检查当前 IMA 凭证是否已配置
