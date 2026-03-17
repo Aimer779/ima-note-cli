@@ -16,14 +16,27 @@
 
 ## 安装
 
-推荐使用 `uv`：
+如果已经安装了 `uv`，可以直接从 GitHub 安装：
+
+```bash
+uv tool install git+https://github.com/Aimer779/ima-note-cli
+```
+
+安装完成后即可直接使用：
+
+```bash
+ima-note --help
+ima-note auth
+```
+
+如果你是在本地开发这个项目，推荐使用：
 
 ```bash
 uv venv
 uv pip install -e .
 ```
 
-如果只想临时运行，也可以直接使用 `uv run`，不强依赖全局安装。
+如果只想临时运行仓库代码，也可以直接使用 `uv run`，不强依赖全局安装。
 
 如果你更偏好 `pip`：
 
@@ -72,74 +85,74 @@ IMA_OPENAPI_APIKEY=your_api_key
 查看帮助：
 
 ```bash
-uv run ima-note --help
+ima-note --help
 ```
 
 检查凭证配置：
 
 ```bash
-uv run ima-note auth
-uv run ima-note auth --json
+ima-note auth
+ima-note auth --json
 ```
 
 按标题搜索笔记：
 
 ```bash
-uv run ima-note search "会议纪要"
+ima-note search "会议纪要"
 ```
 
 按正文搜索笔记：
 
 ```bash
-uv run ima-note search "项目排期" --search-type content
+ima-note search "项目排期" --search-type content
 ```
 
 列出笔记本：
 
 ```bash
-uv run ima-note folders
-uv run ima-note folders --json
+ima-note folders
+ima-note folders --json
 ```
 
 列出某个笔记本下的笔记：
 
 ```bash
-uv run ima-note list --folder-id "user_list_xxx"
-uv run ima-note list --folder-id "user_list_xxx" --json
+ima-note list --folder-id "user_list_xxx"
+ima-note list --folder-id "user_list_xxx" --json
 ```
 
 读取指定笔记正文：
 
 ```bash
-uv run ima-note get "your_doc_id"
+ima-note get "your_doc_id"
 ```
 
 新建笔记：
 
 ```bash
-uv run ima-note create --title "测试标题" --content "正文内容"
-uv run ima-note create --file "./note.md" --folder-id "folder_id"
+ima-note create --title "测试标题" --content "正文内容"
+ima-note create --file "./note.md" --folder-id "folder_id"
 ```
 
 追加内容到已有笔记：
 
 ```bash
-uv run ima-note append "your_doc_id" --content "\n## 补充内容\n\n追加文本"
-uv run ima-note append "your_doc_id" --file "./append.md"
+ima-note append "your_doc_id" --content "\n## 补充内容\n\n追加文本"
+ima-note append "your_doc_id" --file "./append.md"
 ```
 
 输出 JSON：
 
 ```bash
-uv run ima-note search "会议纪要" --json
-uv run ima-note folders --json
-uv run ima-note list --folder-id "user_list_xxx" --json
-uv run ima-note get "your_doc_id" --json
-uv run ima-note create --title "测试标题" --content "正文内容" --json
-uv run ima-note append "your_doc_id" --content "追加文本" --json
+ima-note search "会议纪要" --json
+ima-note folders --json
+ima-note list --folder-id "user_list_xxx" --json
+ima-note get "your_doc_id" --json
+ima-note create --title "测试标题" --content "正文内容" --json
+ima-note append "your_doc_id" --content "追加文本" --json
 ```
 
-也可以直接运行模块入口：
+如果你是在本地开发，也可以直接运行模块入口：
 
 ```bash
 uv run python -m ima_note_cli search "会议纪要"
