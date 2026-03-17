@@ -4,11 +4,15 @@
 
 本项目参考了公开 skill：<https://clawhub.ai/iampennyli/ima-skills>，并结合仓库内的 `skills/ima-note` 实现当前的 IMA 笔记 CLI。
 
-当前 MVP 支持两个核心流程：
+当前已支持这些能力：
 
 - 检查当前 IMA 凭证是否已配置
-- 按标题搜索笔记
+- 按标题或正文搜索笔记
+- 列出笔记本
+- 列出指定笔记本下的笔记
 - 按 `doc_id` 读取笔记纯文本内容
+- 从 Markdown 新建笔记
+- 向已有笔记追加 Markdown 内容
 
 ## 安装
 
@@ -84,17 +88,55 @@ uv run ima-note auth --json
 uv run ima-note search "会议纪要"
 ```
 
+按正文搜索笔记：
+
+```bash
+uv run ima-note search "项目排期" --search-type content
+```
+
+列出笔记本：
+
+```bash
+uv run ima-note folders
+uv run ima-note folders --json
+```
+
+列出某个笔记本下的笔记：
+
+```bash
+uv run ima-note list --folder-id "user_list_xxx"
+uv run ima-note list --folder-id "user_list_xxx" --json
+```
+
 读取指定笔记正文：
 
 ```bash
 uv run ima-note get "your_doc_id"
 ```
 
+新建笔记：
+
+```bash
+uv run ima-note create --title "测试标题" --content "正文内容"
+uv run ima-note create --file "./note.md" --folder-id "folder_id"
+```
+
+追加内容到已有笔记：
+
+```bash
+uv run ima-note append "your_doc_id" --content "\n## 补充内容\n\n追加文本"
+uv run ima-note append "your_doc_id" --file "./append.md"
+```
+
 输出 JSON：
 
 ```bash
 uv run ima-note search "会议纪要" --json
+uv run ima-note folders --json
+uv run ima-note list --folder-id "user_list_xxx" --json
 uv run ima-note get "your_doc_id" --json
+uv run ima-note create --title "测试标题" --content "正文内容" --json
+uv run ima-note append "your_doc_id" --content "追加文本" --json
 ```
 
 也可以直接运行模块入口：
@@ -117,4 +159,30 @@ uv run python -m unittest discover -s tests -v
 ```bash
 ima-note search "会议纪要"
 ima-note get "your_doc_id"
+```
+
+## Project Structure
+
+```text
+ima-note-cli/
+├── skills/
+│   └── ima-note/
+│       ├── SKILL.md            # Skill 说明，定义支持的笔记能力与调用流程
+│       └── references/
+│           └── api.md          # IMA 笔记 OpenAPI 参考文档与字段结构
+├── src/
+│   └── ima_note_cli/
+│       ├── __init__.py         # 包初始化与版本导出
+│       ├── __main__.py         # 模块入口，支持 `python -m ima_note_cli`
+│       ├── api.py              # IMA API 客户端、响应解析和数据模型
+│       ├── cli.py              # argparse 入口、子命令分发和终端输出
+│       └── config.py           # `.env` / 环境变量加载与凭证检查
+├── tests/
+│   ├── test_cli.py             # CLI 命令行为与输出回归测试
+│   └── test_config.py          # 配置加载、优先级和缺失场景测试
+├── .env                        # 本地开发凭证文件
+├── .env.example                # `.env` 模板文件
+├── .gitignore                  # Git 忽略规则
+├── pyproject.toml              # 项目元数据、构建配置和 CLI 入口定义
+└── README.md                   # 项目说明、安装方式和使用文档
 ```
