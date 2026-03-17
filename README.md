@@ -32,6 +32,8 @@ ima-note auth
 如果你是在本地开发这个项目，推荐使用：
 
 ```bash
+git clone https://github.com/Aimer779/ima-note-cli
+cd ima-note-cli
 uv venv
 uv pip install -e .
 ```
