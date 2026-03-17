@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ima-note-cli"
+version = "0.1.0"
+description = "CLI for searching and reading IMA notes via the IMA OpenAPI."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "Codex" }
+]
+license = { text = "MIT" }
+keywords = ["cli", "ima", "notes"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Environment :: Console",
+  "License :: OSI Approved :: MIT License",
+]
+
+[project.scripts]
+ima-note = "ima_note_cli.cli:run"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
