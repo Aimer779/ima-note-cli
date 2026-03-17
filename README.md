@@ -291,10 +291,13 @@ ima-note get "your_doc_id"
 ```text
 ima-note-cli/
 ├── skills/
-│   └── ima-note/
-│       ├── SKILL.md            # Skill 说明，定义支持的笔记能力与调用流程
-│       └── references/
-│           └── api.md          # IMA 笔记 OpenAPI 参考文档与字段结构
+│   ├── ima-note/
+│   │   ├── _meta.json          # 原始 skill 元数据
+│   │   ├── SKILL.md            # IMA 笔记能力说明与调用流程
+│   │   └── references/
+│   │       └── api.md          # IMA 笔记 OpenAPI 参考文档与字段结构
+│   └── ima-note-cli/
+│       └── SKILL.md            # CLI 安装、验证、配置和使用指南 skill
 ├── src/
 │   └── ima_note_cli/
 │       ├── __init__.py         # 包初始化与版本导出
@@ -309,5 +312,6 @@ ima-note-cli/
 ├── .env.example                # `.env` 模板文件
 ├── .gitignore                  # Git 忽略规则
 ├── pyproject.toml              # 项目元数据、构建配置和 CLI 入口定义
+├── uv.lock                     # uv 锁文件，固定依赖解析结果
 └── README.md                   # 项目说明、安装方式和使用文档
 ```
