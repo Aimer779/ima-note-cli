@@ -67,6 +67,90 @@ CLI 会按下面顺序读取凭证：
 
 如果两者同时存在，环境变量优先。
 
+如果你是通过 `uv tool install` 全局安装后在任意目录使用 `ima-note`，推荐直接配置系统环境变量，而不是依赖当前目录下的 `.env`。
+
+### 不同操作系统的配置方式
+
+以下两个环境变量是必需的：
+
+```bash
+IMA_OPENAPI_CLIENTID=your_client_id
+IMA_OPENAPI_APIKEY=your_api_key
+```
+
+Windows PowerShell，当前会话临时生效：
+
+```powershell
+$env:IMA_OPENAPI_CLIENTID="your_client_id"
+$env:IMA_OPENAPI_APIKEY="your_api_key"
+```
+
+Windows PowerShell，持久化到当前用户环境变量：
+
+```powershell
+setx IMA_OPENAPI_CLIENTID "your_client_id"
+setx IMA_OPENAPI_APIKEY "your_api_key"
+```
+
+Windows CMD，当前会话临时生效：
+
+```cmd
+set IMA_OPENAPI_CLIENTID=your_client_id
+set IMA_OPENAPI_APIKEY=your_api_key
+```
+
+Windows CMD，持久化到当前用户环境变量：
+
+```cmd
+setx IMA_OPENAPI_CLIENTID "your_client_id"
+setx IMA_OPENAPI_APIKEY "your_api_key"
+```
+
+macOS / Linux（bash / zsh），当前会话临时生效：
+
+```bash
+export IMA_OPENAPI_CLIENTID="your_client_id"
+export IMA_OPENAPI_APIKEY="your_api_key"
+```
+
+macOS / Linux（zsh），持久化到 `~/.zshrc`：
+
+```bash
+echo 'export IMA_OPENAPI_CLIENTID="your_client_id"' >> ~/.zshrc
+echo 'export IMA_OPENAPI_APIKEY="your_api_key"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+macOS / Linux（bash），持久化到 `~/.bashrc`：
+
+```bash
+echo 'export IMA_OPENAPI_CLIENTID="your_client_id"' >> ~/.bashrc
+echo 'export IMA_OPENAPI_APIKEY="your_api_key"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+fish shell，当前会话临时生效：
+
+```fish
+set -x IMA_OPENAPI_CLIENTID "your_client_id"
+set -x IMA_OPENAPI_APIKEY "your_api_key"
+```
+
+fish shell，持久化：
+
+```fish
+set -Ux IMA_OPENAPI_CLIENTID "your_client_id"
+set -Ux IMA_OPENAPI_APIKEY "your_api_key"
+```
+
+验证配置：
+
+```bash
+ima-note auth
+```
+
+如果使用 `setx`，需要重新打开终端后再验证。
+
 必需字段：
 
 ```bash
