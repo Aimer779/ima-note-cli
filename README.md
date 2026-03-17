@@ -4,6 +4,17 @@
 
 本项目参考了公开 skill：<https://clawhub.ai/iampennyli/ima-skills>，并结合仓库内的 `skills/ima-note` 实现当前的 IMA 笔记 CLI。
 
+## Features
+当前已支持这些能力：
+
+- 检查当前 IMA 凭证是否已配置
+- 按标题或正文搜索笔记
+- 列出笔记本
+- 列出指定笔记本下的笔记
+- 按 `doc_id` 读取笔记纯文本内容
+- 从 Markdown 新建笔记
+- 向已有笔记追加 Markdown 内容
+
 ## Skills
 
 本项目自带两个相关 skill，建议优先从这里开始：
@@ -16,17 +27,8 @@
 - 需要安装 CLI、排查 `uv tool`、验证 `ima-note auth`：用 `ima-note-cli`
 - 需要理解笔记接口、参数、返回结构和工作流：用 `ima-note`
 
-当前已支持这些能力：
 
-- 检查当前 IMA 凭证是否已配置
-- 按标题或正文搜索笔记
-- 列出笔记本
-- 列出指定笔记本下的笔记
-- 按 `doc_id` 读取笔记纯文本内容
-- 从 Markdown 新建笔记
-- 向已有笔记追加 Markdown 内容
-
-## 安装
+## Installation
 
 如果已经安装了 `uv`，可以直接从 GitHub 安装：
 
@@ -70,7 +72,7 @@ uv pip install -e .
 pip install -e .
 ```
 
-## 凭证配置
+## Credentials Configuration
 
 CLI 会按下面顺序读取凭证：
 
@@ -81,7 +83,7 @@ CLI 会按下面顺序读取凭证：
 
 如果你是通过 `uv tool install` 全局安装后在任意目录使用 `ima-note`，推荐直接配置系统环境变量，而不是依赖当前目录下的 `.env`。
 
-### 不同操作系统的配置方式
+### Config ways in different OS
 
 以下两个环境变量是必需的：
 
@@ -190,7 +192,7 @@ IMA_OPENAPI_CLIENTID=your_client_id
 IMA_OPENAPI_APIKEY=your_api_key
 ```
 
-## 用法
+## Usage
 
 查看帮助：
 
@@ -269,7 +271,7 @@ uv run python -m ima_note_cli search "会议纪要"
 uv run python -m ima_note_cli get "your_doc_id"
 ```
 
-## 开发
+## Development
 
 运行测试：
 
