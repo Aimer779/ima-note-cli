@@ -29,6 +29,18 @@ ima-note --help
 ima-note auth
 ```
 
+更新到最新版本：
+
+```bash
+uv tool install --reinstall git+https://github.com/Aimer779/ima-note-cli
+```
+
+卸载：
+
+```bash
+uv tool uninstall ima-note-cli
+```
+
 如果你是在本地开发这个项目，推荐使用：
 
 ```bash
