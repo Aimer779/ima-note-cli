@@ -15,6 +15,10 @@
 - 从 Markdown 新建笔记
 - 向已有笔记追加 Markdown 内容
 
+TODO:
+- 检索知识库
+- 导入知识库
+
 ## Skills
 
 本项目自带两个相关 skill，建议优先从这里开始：
