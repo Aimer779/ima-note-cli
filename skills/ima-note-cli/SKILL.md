@@ -115,3 +115,10 @@ When the user is in a local checkout and prefers not to install globally, replac
 - If the command is not found after `uv tool install`, check the UV tool bin directory with `uv tool dir --bin` and make sure it is on `PATH`.
 - If credentials appear correct but API calls still fail, ask the user to run `ima-note auth` first, then a minimal read command such as `ima-note search "test"`.
 - If the user wants `.env`, remind them that the CLI only reads `.env` from the current working directory.
+- If Windows terminals throw `'gbk' codec can't encode character ...`, explain that the terminal is using `GBK` while note output contains emoji or other non-GBK characters.
+- For that encoding problem on Windows, suggest this order:
+  - Run `chcp 65001`
+  - Set PowerShell session variables: `$env:PYTHONUTF8="1"` and `$env:PYTHONIOENCODING="utf-8"`
+  - Or in CMD: `set PYTHONUTF8=1` and `set PYTHONIOENCODING=utf-8`
+  - Retry with a minimal command such as `ima-note search "coding"`
+- If the user wants the UTF-8 behavior to persist on Windows, suggest `setx PYTHONUTF8 "1"` and `setx PYTHONIOENCODING "utf-8"`, then tell them to open a new terminal.

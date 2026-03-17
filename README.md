@@ -169,6 +169,50 @@ ima-note auth
 
 如果使用 `setx`，需要重新打开终端后再验证。
 
+### Windows terminal encoding
+
+在部分 Windows 终端里，如果默认编码是 `GBK`，而搜索结果标题或摘要里包含 emoji 或其他非 `GBK` 字符，CLI 可能报错：
+
+```text
+Error: 'gbk' codec can't encode character ...
+```
+
+推荐按下面顺序处理：
+
+1. 先把终端代码页切到 `UTF-8`
+2. 再强制 Python 使用 `UTF-8`
+
+PowerShell：
+
+```powershell
+chcp 65001
+$env:PYTHONUTF8="1"
+$env:PYTHONIOENCODING="utf-8"
+```
+
+CMD：
+
+```cmd
+chcp 65001
+set PYTHONUTF8=1
+set PYTHONIOENCODING=utf-8
+```
+
+然后重新执行命令：
+
+```bash
+ima-note search "coding"
+```
+
+如果你希望持久化生效，可以在 Windows 里执行：
+
+```powershell
+setx PYTHONUTF8 "1"
+setx PYTHONIOENCODING "utf-8"
+```
+
+执行 `setx` 后需要重新打开终端。
+
 必需字段：
 
 ```bash
