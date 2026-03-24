@@ -1,12 +1,7 @@
 # ima-note-cli
 
-<<<<<<< Updated upstream
 感谢Linux.do社区的支持 https://linux.do/t/topic/1773167
-
-`ima-note-cli` 是一个基于 Python 的命令行工具，用于通过 IMA OpenAPI 搜索和读取个人笔记。
-=======
 `ima-note-cli` 是一个基于 Python 的命令行工具，用于通过 IMA OpenAPI 管理个人笔记和知识库。
->>>>>>> Stashed changes
 
 本项目参考了公开 skill：<https://clawhub.ai/iampennyli/ima-skills>，并结合仓库内的参考文档实现当前的 IMA CLI。
 
