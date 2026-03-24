@@ -164,6 +164,7 @@ Legacy note compatibility:
 - If credentials appear correct but API calls still fail, ask the user to run `ima auth` first, then a minimal read command such as `ima note search "test"`.
 - If the user wants `.env`, remind them that the CLI only reads `.env` from the current working directory.
 - If Windows terminals throw `'gbk' codec can't encode character ...`, explain that the terminal is using `GBK` while note output contains emoji or other non-GBK characters.
+- `ima auth` now checks `PYTHONUTF8` and `PYTHONIOENCODING` on Windows and prints a shell-specific hint when they are missing, so use that as the first diagnostic step.
 - For that encoding problem on Windows, suggest this order:
   - Set PowerShell session variables: `$env:PYTHONUTF8="1"` and `$env:PYTHONIOENCODING="utf-8"`
   - Or in CMD: `set PYTHONUTF8=1` and `set PYTHONIOENCODING=utf-8`

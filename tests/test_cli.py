@@ -189,6 +189,58 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertTrue(parsed["configured"])
         self.assertTrue(parsed["credentials"]["IMA_OPENAPI_CLIENTID"]["set"])
+        self.assertIn("environment_check", parsed)
+
+    def test_auth_prints_windows_powershell_encoding_hint(self) -> None:
+        stdout = io.StringIO()
+        configured = CredentialStatus(
+            client_id="client",
+            api_key="key",
+            client_id_source="environment",
+            api_key_source="environment",
+        )
+
+        with patch("ima_note_cli.cli.inspect_credentials", return_value=configured):
+            with patch("ima_note_cli.cli.sys.platform", "win32"):
+                with patch.dict(
+                    "ima_note_cli.cli.os.environ",
+                    {"PSModulePath": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\Modules"},
+                    clear=True,
+                ):
+                    with redirect_stdout(stdout):
+                        code = run(["auth"])
+
+        output = stdout.getvalue()
+        self.assertEqual(code, 0)
+        self.assertIn("Environment: warning", output)
+        self.assertIn('$env:PYTHONUTF8="1"', output)
+        self.assertIn('$env:PYTHONIOENCODING="utf-8"', output)
+
+    def test_auth_json_reports_windows_cmd_environment_check(self) -> None:
+        stdout = io.StringIO()
+        configured = CredentialStatus(
+            client_id="client",
+            api_key="key",
+            client_id_source="environment",
+            api_key_source="environment",
+        )
+
+        with patch("ima_note_cli.cli.inspect_credentials", return_value=configured):
+            with patch("ima_note_cli.cli.sys.platform", "win32"):
+                with patch.dict(
+                    "ima_note_cli.cli.os.environ",
+                    {"ComSpec": "C:\\Windows\\System32\\cmd.exe", "PYTHONUTF8": "1"},
+                    clear=True,
+                ):
+                    with redirect_stdout(stdout):
+                        code = run(["auth", "--json"])
+
+        parsed = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0)
+        self.assertEqual(parsed["environment_check"]["platform"], "windows")
+        self.assertEqual(parsed["environment_check"]["shell"], "cmd")
+        self.assertFalse(parsed["environment_check"]["ok"])
+        self.assertEqual(parsed["environment_check"]["missing"], ["PYTHONIOENCODING"])
 
     def test_note_search_prints_human_readable_output(self) -> None:
         fake_result = {

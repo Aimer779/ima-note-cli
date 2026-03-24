@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
 from typing import Sequence
@@ -64,6 +65,7 @@ def run_note_legacy(argv: Sequence[str] | None = None) -> int:
 
 
 def handle_auth(status: CredentialStatus, as_json: bool) -> int:
+    environment_check = inspect_runtime_environment()
     payload = {
         "configured": status.is_configured,
         "credentials": {
@@ -76,6 +78,7 @@ def handle_auth(status: CredentialStatus, as_json: bool) -> int:
                 "source": status.api_key_source,
             },
         },
+        "environment_check": environment_check,
     }
 
     if as_json:
@@ -93,6 +96,7 @@ def handle_auth(status: CredentialStatus, as_json: bool) -> int:
         f"{'set' if status.api_key else 'missing'}"
         f"{format_source_suffix(status.api_key_source)}"
     )
+    print_environment_check(environment_check)
 
     if status.is_configured:
         return 0
@@ -106,3 +110,59 @@ def format_source_suffix(source: str | None) -> str:
     if not source:
         return ""
     return f" ({source})"
+
+
+def inspect_runtime_environment() -> dict[str, object]:
+    platform_name = "windows" if sys.platform.startswith("win") else sys.platform
+    if platform_name != "windows":
+        return {
+            "platform": platform_name,
+            "shell": "unknown",
+            "ok": True,
+            "missing": [],
+        }
+
+    missing: list[str] = []
+    if os.environ.get("PYTHONUTF8") != "1":
+        missing.append("PYTHONUTF8")
+
+    pythonioencoding = os.environ.get("PYTHONIOENCODING", "")
+    if pythonioencoding.lower() != "utf-8":
+        missing.append("PYTHONIOENCODING")
+
+    return {
+        "platform": "windows",
+        "shell": detect_windows_shell(),
+        "ok": not missing,
+        "missing": missing,
+    }
+
+
+def detect_windows_shell() -> str:
+    if os.environ.get("PSModulePath"):
+        return "powershell"
+
+    comspec_name = Path(os.environ.get("ComSpec", "")).name.lower()
+    if comspec_name == "cmd.exe":
+        return "cmd"
+    return "unknown"
+
+
+def print_environment_check(environment_check: dict[str, object]) -> None:
+    if environment_check["platform"] != "windows" or environment_check["ok"]:
+        return
+
+    print()
+    print("Environment: warning")
+    print("Windows terminal encoding may cause garbled output.")
+
+    shell_name = environment_check["shell"]
+    if shell_name == "powershell":
+        print('Set PowerShell session variables: `$env:PYTHONUTF8="1"` and `$env:PYTHONIOENCODING="utf-8"`')
+        return
+    if shell_name == "cmd":
+        print("Or in CMD: `set PYTHONUTF8=1` and `set PYTHONIOENCODING=utf-8`")
+        return
+
+    print('Set PowerShell session variables: `$env:PYTHONUTF8="1"` and `$env:PYTHONIOENCODING="utf-8"`')
+    print("Or in CMD: `set PYTHONUTF8=1` and `set PYTHONIOENCODING=utf-8`")

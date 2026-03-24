@@ -184,6 +184,8 @@ ima auth
 Error: 'gbk' codec can't encode character ...
 ```
 
+从当前版本开始，`ima auth` 会在 Windows 下检查 `PYTHONUTF8` 和 `PYTHONIOENCODING`，如果未正确设置，会直接给出 PowerShell 或 CMD 的修复提示。
+
 推荐按下面顺序处理：
 
 1. 先把终端代码页切到 `UTF-8`
