@@ -21,7 +21,8 @@ classifiers = [
 ]
 
 [project.scripts]
-ima-note = "ima_note_cli.cli:run"
+ima = "ima_note_cli.cli:run"
+ima-note = "ima_note_cli.cli:run_note_legacy"
 
 [tool.setuptools]
 package-dir = { "" = "src" }

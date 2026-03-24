@@ -6,6 +6,7 @@ import os
 import unittest
 from unittest.mock import patch
 
+from _bootstrap import ROOT  # noqa: F401
 from ima_note_cli.config import ConfigError, inspect_credentials, load_credentials, parse_dotenv
 
 

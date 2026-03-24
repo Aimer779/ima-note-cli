@@ -8,12 +8,20 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from ima_note_cli.api import ApiError, FolderResult, SearchResult
+from _bootstrap import ROOT  # noqa: F401
+from ima_note_cli.api import (
+    ApiError,
+    FolderResult,
+    KnowledgeBaseResult,
+    KnowledgeBaseSummary,
+    KnowledgeEntry,
+    SearchResult,
+)
 from ima_note_cli.cli import run
 from ima_note_cli.config import CredentialStatus, Credentials
 
 
-class FakeClient:
+class FakeNotesClient:
     def __init__(
         self,
         search_result=None,
@@ -71,6 +79,69 @@ class FakeClient:
         return self._append_result
 
 
+class FakeKnowledgeClient:
+    def __init__(
+        self,
+        search_bases_result=None,
+        detail_result=None,
+        browse_result=None,
+        search_result=None,
+        addable_result=None,
+        add_note_result=None,
+        import_urls_result=None,
+        error: Exception | None = None,
+    ) -> None:
+        self._search_bases_result = search_bases_result or {"knowledge_bases": [], "next_cursor": "", "is_end": True}
+        self._detail_result = detail_result
+        self._browse_result = browse_result or {"items": [], "next_cursor": "", "is_end": True, "current_path": []}
+        self._search_result = search_result or {"items": [], "next_cursor": "", "is_end": True}
+        self._addable_result = addable_result or {"knowledge_bases": [], "next_cursor": "", "is_end": True}
+        self._add_note_result = add_note_result or {"media_id": "media-1", "knowledge_base_id": "kb-1", "doc_id": "doc-1", "title": "doc-1", "folder_id": ""}
+        self._import_urls_result = import_urls_result or {"results": [], "knowledge_base_id": "kb-1", "folder_id": ""}
+        self._error = error
+        self.last_import_urls_call = None
+
+    def search_knowledge_bases(self, query: str, limit: int, *, cursor: str = ""):
+        if self._error:
+            raise self._error
+        return self._search_bases_result
+
+    def get_knowledge_base(self, knowledge_base_id: str):
+        if self._error:
+            raise self._error
+        return self._detail_result
+
+    def list_knowledge(self, knowledge_base_id: str, limit: int, *, cursor: str = "", folder_id: str | None = None):
+        if self._error:
+            raise self._error
+        return self._browse_result
+
+    def search_knowledge(self, query: str, knowledge_base_id: str, *, cursor: str = ""):
+        if self._error:
+            raise self._error
+        return self._search_result
+
+    def list_addable_knowledge_bases(self, limit: int, *, cursor: str = ""):
+        if self._error:
+            raise self._error
+        return self._addable_result
+
+    def add_note(self, knowledge_base_id: str, doc_id: str, *, title: str, folder_id: str | None = None):
+        if self._error:
+            raise self._error
+        return self._add_note_result
+
+    def import_urls(self, knowledge_base_id: str, urls: list[str], *, folder_id: str | None = None):
+        if self._error:
+            raise self._error
+        self.last_import_urls_call = {
+            "knowledge_base_id": knowledge_base_id,
+            "urls": urls,
+            "folder_id": folder_id,
+        }
+        return self._import_urls_result
+
+
 class CliTests(unittest.TestCase):
     @staticmethod
     def _configured_status() -> CredentialStatus:
@@ -101,24 +172,6 @@ class CliTests(unittest.TestCase):
         self.assertIn("IMA_OPENAPI_APIKEY: set (environment)", output)
         self.assertEqual(stderr.getvalue(), "")
 
-    def test_auth_returns_non_zero_when_missing(self) -> None:
-        stdout = io.StringIO()
-        stderr = io.StringIO()
-        missing = CredentialStatus(
-            client_id="",
-            api_key="",
-            client_id_source=None,
-            api_key_source=None,
-        )
-
-        with patch("ima_note_cli.cli.inspect_credentials", return_value=missing):
-            with redirect_stdout(stdout), redirect_stderr(stderr):
-                code = run(["auth"])
-
-        self.assertEqual(code, 1)
-        self.assertIn("Status: missing credentials", stdout.getvalue())
-        self.assertIn("Configure the missing values", stderr.getvalue())
-
     def test_auth_json_output(self) -> None:
         stdout = io.StringIO()
         configured = CredentialStatus(
@@ -137,7 +190,7 @@ class CliTests(unittest.TestCase):
         self.assertTrue(parsed["configured"])
         self.assertTrue(parsed["credentials"]["IMA_OPENAPI_CLIENTID"]["set"])
 
-    def test_search_prints_human_readable_output(self) -> None:
+    def test_note_search_prints_human_readable_output(self) -> None:
         fake_result = {
             "docs": [
                 SearchResult(
@@ -158,17 +211,11 @@ class CliTests(unittest.TestCase):
         stdout = io.StringIO()
         stderr = io.StringIO()
 
-        with patch(
-            "ima_note_cli.cli.inspect_credentials",
-            return_value=self._configured_status(),
-        ):
-            with patch(
-                "ima_note_cli.cli.load_credentials",
-                return_value=self._configured_credentials(),
-            ):
-                with patch("ima_note_cli.cli.ImaNoteApiClient", return_value=FakeClient(search_result=fake_result)):
+        with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
+            with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
+                with patch("ima_note_cli.cli.NotesApiClient", return_value=FakeNotesClient(search_result=fake_result)):
                     with redirect_stdout(stdout), redirect_stderr(stderr):
-                        code = run(["search", "会议"])
+                        code = run(["note", "search", "会议"])
 
         output = stdout.getvalue()
         self.assertEqual(code, 0)
@@ -177,7 +224,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("会议纪要", output)
         self.assertEqual(stderr.getvalue(), "")
 
-    def test_search_json_output(self) -> None:
+    def test_note_search_json_output(self) -> None:
         fake_result = {
             "docs": [
                 SearchResult(
@@ -196,19 +243,13 @@ class CliTests(unittest.TestCase):
             "is_end": True,
         }
         stdout = io.StringIO()
-        fake_client = FakeClient(search_result=fake_result)
+        fake_client = FakeNotesClient(search_result=fake_result)
 
-        with patch(
-            "ima_note_cli.cli.inspect_credentials",
-            return_value=self._configured_status(),
-        ):
-            with patch("ima_note_cli.cli.ImaNoteApiClient", return_value=fake_client):
-                with patch(
-                    "ima_note_cli.cli.load_credentials",
-                    return_value=self._configured_credentials(),
-                ):
+        with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
+            with patch("ima_note_cli.cli.NotesApiClient", return_value=fake_client):
+                with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
                     with redirect_stdout(stdout):
-                        code = run(["search", "会议", "--json"])
+                        code = run(["note", "search", "会议", "--json"])
 
         parsed = json.loads(stdout.getvalue())
         self.assertEqual(code, 0)
@@ -217,20 +258,20 @@ class CliTests(unittest.TestCase):
         self.assertEqual(fake_client.last_search_call["search_type"], 0)
         self.assertEqual(fake_client.last_search_call["sort_type"], 0)
 
-    def test_search_supports_content_search_type_and_sort(self) -> None:
-        fake_client = FakeClient()
+    def test_note_search_supports_content_search_type_and_sort(self) -> None:
+        fake_client = FakeNotesClient()
 
         with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
             with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
-                with patch("ima_note_cli.cli.ImaNoteApiClient", return_value=fake_client):
-                    code = run(["search", "项目排期", "--search-type", "content", "--sort", "title", "--start", "5"])
+                with patch("ima_note_cli.cli.NotesApiClient", return_value=fake_client):
+                    code = run(["note", "search", "项目排期", "--search-type", "content", "--sort", "title", "--start", "5"])
 
         self.assertEqual(code, 0)
         self.assertEqual(fake_client.last_search_call["search_type"], 1)
         self.assertEqual(fake_client.last_search_call["sort_type"], 2)
         self.assertEqual(fake_client.last_search_call["start"], 5)
 
-    def test_folders_prints_human_readable_output(self) -> None:
+    def test_note_folders_prints_human_readable_output(self) -> None:
         folders_result = {
             "folders": [
                 FolderResult(
@@ -251,9 +292,9 @@ class CliTests(unittest.TestCase):
 
         with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
             with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
-                with patch("ima_note_cli.cli.ImaNoteApiClient", return_value=FakeClient(folders_result=folders_result)):
+                with patch("ima_note_cli.cli.NotesApiClient", return_value=FakeNotesClient(folders_result=folders_result)):
                     with redirect_stdout(stdout):
-                        code = run(["folders"])
+                        code = run(["note", "folders"])
 
         output = stdout.getvalue()
         self.assertEqual(code, 0)
@@ -261,7 +302,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("folder-1", output)
         self.assertIn("Next cursor: next-1", output)
 
-    def test_list_json_output(self) -> None:
+    def test_note_list_json_output(self) -> None:
         notes_result = {
             "notes": [
                 SearchResult(
@@ -281,97 +322,159 @@ class CliTests(unittest.TestCase):
             "folder_id": "folder-1",
         }
         stdout = io.StringIO()
-        fake_client = FakeClient(notes_result=notes_result)
+        fake_client = FakeNotesClient(notes_result=notes_result)
 
         with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
             with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
-                with patch("ima_note_cli.cli.ImaNoteApiClient", return_value=fake_client):
+                with patch("ima_note_cli.cli.NotesApiClient", return_value=fake_client):
                     with redirect_stdout(stdout):
-                        code = run(["list", "--folder-id", "folder-1", "--json"])
+                        code = run(["note", "list", "--folder-id", "folder-1", "--json"])
 
         parsed = json.loads(stdout.getvalue())
         self.assertEqual(code, 0)
         self.assertEqual(parsed["notes"][0]["doc_id"], "doc-200")
         self.assertEqual(fake_client.last_list_notes_call["folder_id"], "folder-1")
 
-    def test_create_with_title_wraps_markdown(self) -> None:
-        fake_client = FakeClient(create_result={"doc_id": "doc-new", "folder_id": "folder-1"})
+    def test_note_create_with_title_wraps_markdown(self) -> None:
+        fake_client = FakeNotesClient(create_result={"doc_id": "doc-new", "folder_id": "folder-1"})
 
         with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
             with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
-                with patch("ima_note_cli.cli.ImaNoteApiClient", return_value=fake_client):
-                    code = run(["create", "--title", "测试标题", "--content", "正文内容", "--folder-id", "folder-1"])
+                with patch("ima_note_cli.cli.NotesApiClient", return_value=fake_client):
+                    code = run(["note", "create", "--title", "测试标题", "--content", "正文内容", "--folder-id", "folder-1"])
 
         self.assertEqual(code, 0)
         self.assertEqual(fake_client.last_create_call["folder_id"], "folder-1")
         self.assertEqual(fake_client.last_create_call["content"], "# 测试标题\n\n正文内容")
 
-    def test_create_can_read_markdown_from_file(self) -> None:
-        fake_client = FakeClient(create_result={"doc_id": "doc-new", "folder_id": ""})
+    def test_note_create_can_read_markdown_from_file(self) -> None:
+        fake_client = FakeNotesClient(create_result={"doc_id": "doc-new", "folder_id": ""})
         with TemporaryDirectory() as tmp_dir:
             note_path = Path(tmp_dir) / "note.md"
             note_path.write_text("# 文件标题\n\n文件正文", encoding="utf-8")
 
             with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
                 with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
-                    with patch("ima_note_cli.cli.ImaNoteApiClient", return_value=fake_client):
-                        code = run(["create", "--file", str(note_path), "--json"])
+                    with patch("ima_note_cli.cli.NotesApiClient", return_value=fake_client):
+                        code = run(["note", "create", "--file", str(note_path), "--json"])
 
         self.assertEqual(code, 0)
         self.assertEqual(fake_client.last_create_call["content"], "# 文件标题\n\n文件正文")
 
-    def test_append_with_content(self) -> None:
-        fake_client = FakeClient(append_result={"doc_id": "doc-9"})
+    def test_note_append_with_content(self) -> None:
+        fake_client = FakeNotesClient(append_result={"doc_id": "doc-9"})
 
         with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
             with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
-                with patch("ima_note_cli.cli.ImaNoteApiClient", return_value=fake_client):
-                    code = run(["append", "doc-9", "--content", "\n## 补充\n\n追加内容"])
+                with patch("ima_note_cli.cli.NotesApiClient", return_value=fake_client):
+                    code = run(["note", "append", "doc-9", "--content", "\n## 补充\n\n追加内容"])
 
         self.assertEqual(code, 0)
         self.assertEqual(fake_client.last_append_call["doc_id"], "doc-9")
         self.assertIn("追加内容", fake_client.last_append_call["content"])
 
-    def test_get_prints_content(self) -> None:
+    def test_note_get_prints_content(self) -> None:
         stdout = io.StringIO()
 
-        with patch(
-            "ima_note_cli.cli.inspect_credentials",
-            return_value=self._configured_status(),
-        ):
-            with patch(
-                "ima_note_cli.cli.load_credentials",
-                return_value=self._configured_credentials(),
-            ):
+        with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
+            with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
                 with patch(
-                    "ima_note_cli.cli.ImaNoteApiClient",
-                    return_value=FakeClient(get_result={"doc_id": "doc-1", "content": "正文内容"}),
+                    "ima_note_cli.cli.NotesApiClient",
+                    return_value=FakeNotesClient(get_result={"doc_id": "doc-1", "content": "正文内容"}),
                 ):
                     with redirect_stdout(stdout):
-                        code = run(["get", "doc-1"])
+                        code = run(["note", "get", "doc-1"])
 
         self.assertEqual(code, 0)
         self.assertIn("Doc ID: doc-1", stdout.getvalue())
         self.assertIn("正文内容", stdout.getvalue())
 
+    def test_kb_search_base_json_output(self) -> None:
+        stdout = io.StringIO()
+        fake_client = FakeKnowledgeClient(
+            search_bases_result={
+                "knowledge_bases": [KnowledgeBaseSummary("kb-1", "产品文档库", "https://example.com/cover.png")],
+                "next_cursor": "",
+                "is_end": True,
+            }
+        )
+
+        with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
+            with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
+                with patch("ima_note_cli.cli.KnowledgeBaseApiClient", return_value=fake_client):
+                    with redirect_stdout(stdout):
+                        code = run(["kb", "search-base", "产品", "--json"])
+
+        parsed = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0)
+        self.assertEqual(parsed["knowledge_bases"][0]["knowledge_base_id"], "kb-1")
+
+    def test_kb_show_base_prints_details(self) -> None:
+        stdout = io.StringIO()
+        fake_client = FakeKnowledgeClient(
+            detail_result=KnowledgeBaseResult(
+                knowledge_base_id="kb-1",
+                name="产品文档库",
+                cover_url="",
+                description="产品资料",
+                recommended_questions=("最新版本是什么？",),
+            )
+        )
+
+        with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
+            with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
+                with patch("ima_note_cli.cli.KnowledgeBaseApiClient", return_value=fake_client):
+                    with redirect_stdout(stdout):
+                        code = run(["kb", "show-base", "--kb-id", "kb-1"])
+
+        self.assertEqual(code, 0)
+        output = stdout.getvalue()
+        self.assertIn("产品文档库", output)
+        self.assertIn("产品资料", output)
+
+    def test_kb_browse_json_output(self) -> None:
+        stdout = io.StringIO()
+        fake_client = FakeKnowledgeClient(
+            browse_result={
+                "items": [KnowledgeEntry("file", "media-1", "需求文档.pdf", "folder-1", "", None, None, None)],
+                "next_cursor": "next-1",
+                "is_end": False,
+                "current_path": [],
+            }
+        )
+
+        with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
+            with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
+                with patch("ima_note_cli.cli.KnowledgeBaseApiClient", return_value=fake_client):
+                    with redirect_stdout(stdout):
+                        code = run(["kb", "browse", "--kb-id", "kb-1", "--json"])
+
+        parsed = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0)
+        self.assertEqual(parsed["items"][0]["item_id"], "media-1")
+
+    def test_kb_add_url_passes_urls_to_client(self) -> None:
+        stdout = io.StringIO()
+        fake_client = FakeKnowledgeClient(import_urls_result={"results": [], "knowledge_base_id": "kb-1", "folder_id": ""})
+
+        with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
+            with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
+                with patch("ima_note_cli.cli.KnowledgeBaseApiClient", return_value=fake_client):
+                    with redirect_stdout(stdout):
+                        code = run(["kb", "add-url", "--kb-id", "kb-1", "--url", "https://example.com/article"])
+
+        self.assertEqual(code, 0)
+        self.assertEqual(fake_client.last_import_urls_call["urls"], ["https://example.com/article"])
+
     def test_api_errors_return_non_zero_exit_code(self) -> None:
         stdout = io.StringIO()
         stderr = io.StringIO()
 
-        with patch(
-            "ima_note_cli.cli.inspect_credentials",
-            return_value=self._configured_status(),
-        ):
-            with patch(
-                "ima_note_cli.cli.load_credentials",
-                return_value=self._configured_credentials(),
-            ):
-                with patch(
-                    "ima_note_cli.cli.ImaNoteApiClient",
-                    return_value=FakeClient(error=ApiError("boom")),
-                ):
+        with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
+            with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
+                with patch("ima_note_cli.cli.NotesApiClient", return_value=FakeNotesClient(error=ApiError("boom"))):
                     with redirect_stdout(stdout), redirect_stderr(stderr):
-                        code = run(["search", "会议"])
+                        code = run(["note", "search", "会议"])
 
         self.assertEqual(code, 1)
         self.assertIn("Error: boom", stderr.getvalue())

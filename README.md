@@ -1,25 +1,35 @@
 # ima-note-cli
 
+<<<<<<< Updated upstream
 感谢Linux.do社区的支持 https://linux.do/t/topic/1773167
 
 `ima-note-cli` 是一个基于 Python 的命令行工具，用于通过 IMA OpenAPI 搜索和读取个人笔记。
+=======
+`ima-note-cli` 是一个基于 Python 的命令行工具，用于通过 IMA OpenAPI 管理个人笔记和知识库。
+>>>>>>> Stashed changes
 
-本项目参考了公开 skill：<https://clawhub.ai/iampennyli/ima-skills>，并结合仓库内的 `skills/ima-note` 实现当前的 IMA 笔记 CLI。
+本项目参考了公开 skill：<https://clawhub.ai/iampennyli/ima-skills>，并结合仓库内的参考文档实现当前的 IMA CLI。
 
 ## Features
 当前已支持这些能力：
 
 - 检查当前 IMA 凭证是否已配置
-- 按标题或正文搜索笔记
-- 列出笔记本
-- 列出指定笔记本下的笔记
-- 按 `doc_id` 读取笔记纯文本内容
-- 从 Markdown 新建笔记
-- 向已有笔记追加 Markdown 内容
-
-TODO:
-- 检索知识库
-- 导入知识库
+- 管理笔记：
+  - 按标题或正文搜索笔记
+  - 列出笔记本
+  - 列出指定笔记本下的笔记
+  - 按 `doc_id` 读取笔记纯文本内容
+  - 从 Markdown 新建笔记
+  - 向已有笔记追加 Markdown 内容
+- 管理知识库：
+  - 搜索知识库列表
+  - 查看知识库详情
+  - 浏览知识库内容
+  - 在知识库内搜索文件/文件夹
+  - 列出可添加内容的知识库
+  - 将已有笔记添加到知识库
+  - 导入 URL 到知识库
+  - 上传本地文件到知识库
 
 ## Skills
 
@@ -45,8 +55,8 @@ uv tool install git+https://github.com/Aimer779/ima-note-cli
 安装完成后即可直接使用：
 
 ```bash
-ima-note --help
-ima-note auth
+ima --help
+ima auth
 ```
 
 更新到最新版本：
@@ -87,7 +97,7 @@ CLI 会按下面顺序读取凭证：
 
 如果两者同时存在，环境变量优先。
 
-如果你是通过 `uv tool install` 全局安装后在任意目录使用 `ima-note`，推荐直接配置系统环境变量，而不是依赖当前目录下的 `.env`。
+如果你是通过 `uv tool install` 全局安装后在任意目录使用 `ima`，推荐直接配置系统环境变量，而不是依赖当前目录下的 `.env`。
 
 ### Config ways in different OS
 
@@ -166,7 +176,7 @@ set -Ux IMA_OPENAPI_APIKEY "your_api_key"
 验证配置：
 
 ```bash
-ima-note auth
+ima auth
 ```
 
 如果使用 `setx`，需要重新打开终端后再验证。
@@ -203,7 +213,7 @@ set PYTHONIOENCODING=utf-8
 然后重新执行命令：
 
 ```bash
-ima-note search "coding"
+ima note search "coding"
 ```
 
 如果你希望持久化生效，可以在 Windows 里执行：
@@ -247,78 +257,80 @@ IMA_OPENAPI_APIKEY=your_api_key
 查看帮助：
 
 ```bash
-ima-note --help
+ima --help
 ```
 
 检查凭证配置：
 
 ```bash
-ima-note auth
-ima-note auth --json
+ima auth
+ima auth --json
 ```
 
-按标题搜索笔记：
+笔记命令：
 
 ```bash
-ima-note search "会议纪要"
+ima note search "会议纪要"
 ```
 
 按正文搜索笔记：
 
 ```bash
-ima-note search "项目排期" --search-type content
+ima note search "项目排期" --search-type content
 ```
 
 列出笔记本：
 
 ```bash
-ima-note folders
-ima-note folders --json
+ima note folders
+ima note folders --json
 ```
 
 列出某个笔记本下的笔记：
 
 ```bash
-ima-note list --folder-id "user_list_xxx"
-ima-note list --folder-id "user_list_xxx" --json
+ima note list --folder-id "user_list_xxx"
+ima note list --folder-id "user_list_xxx" --json
 ```
 
 读取指定笔记正文：
 
 ```bash
-ima-note get "your_doc_id"
+ima note get "your_doc_id"
 ```
 
 新建笔记：
 
 ```bash
-ima-note create --title "测试标题" --content "正文内容"
-ima-note create --file "./note.md" --folder-id "folder_id"
+ima note create --title "测试标题" --content "正文内容"
+ima note create --file "./note.md" --folder-id "folder_id"
 ```
 
 追加内容到已有笔记：
 
 ```bash
-ima-note append "your_doc_id" --content "\n## 补充内容\n\n追加文本"
-ima-note append "your_doc_id" --file "./append.md"
+ima note append "your_doc_id" --content "\n## 补充内容\n\n追加文本"
+ima note append "your_doc_id" --file "./append.md"
 ```
 
-输出 JSON：
+知识库命令：
 
 ```bash
-ima-note search "会议纪要" --json
-ima-note folders --json
-ima-note list --folder-id "user_list_xxx" --json
-ima-note get "your_doc_id" --json
-ima-note create --title "测试标题" --content "正文内容" --json
-ima-note append "your_doc_id" --content "追加文本" --json
+ima kb search-base "产品文档库"
+ima kb show-base --kb-id "kb_xxx"
+ima kb browse --kb-id "kb_xxx"
+ima kb search "排期" --kb-id "kb_xxx"
+ima kb addable
+ima kb add-note --kb-id "kb_xxx" --doc-id "doc_xxx" --title "会议纪要"
+ima kb add-url --kb-id "kb_xxx" --url "https://example.com/article"
+ima kb add-file --kb-id "kb_xxx" --file "./report.pdf"
 ```
 
 如果你是在本地开发，也可以直接运行模块入口：
 
 ```bash
-uv run python -m ima_note_cli search "会议纪要"
-uv run python -m ima_note_cli get "your_doc_id"
+uv run python -m ima_note_cli note search "会议纪要"
+uv run python -m ima_note_cli kb search-base "产品文档库"
 ```
 
 ## Development
@@ -332,8 +344,8 @@ uv run python -m unittest discover -s tests -v
 如果已经安装为可执行命令，也可以直接运行：
 
 ```bash
-ima-note search "会议纪要"
-ima-note get "your_doc_id"
+ima note search "会议纪要"
+ima kb browse --kb-id "kb_xxx"
 ```
 
 ## Project Structure
@@ -341,23 +353,25 @@ ima-note get "your_doc_id"
 ```text
 ima-note-cli/
 ├── skills/
-│   ├── ima-note/
-│   │   ├── _meta.json          # 原始 skill 元数据
-│   │   ├── SKILL.md            # IMA 笔记能力说明与调用流程
-│   │   └── references/
-│   │       └── api.md          # IMA 笔记 OpenAPI 参考文档与字段结构
-│   └── ima-note-cli/
-│       └── SKILL.md            # CLI 安装、验证、配置和使用指南 skill
+│   └── ...
 ├── src/
 │   └── ima_note_cli/
 │       ├── __init__.py         # 包初始化与版本导出
 │       ├── __main__.py         # 模块入口，支持 `python -m ima_note_cli`
-│       ├── api.py              # IMA API 客户端、响应解析和数据模型
-│       ├── cli.py              # argparse 入口、子命令分发和终端输出
-│       └── config.py           # `.env` / 环境变量加载与凭证检查
+│       ├── api.py              # 兼容导出层
+│       ├── cli.py              # 顶层 CLI：`ima auth` / `ima note` / `ima kb`
+│       ├── config.py           # `.env` / 环境变量加载与凭证检查
+│       ├── http.py             # 共享 HTTP 请求与错误处理
+│       ├── notes_api.py        # IMA 笔记 API 客户端与数据模型
+│       ├── notes_cli.py        # `ima note ...` 命令实现
+│       ├── knowledge_api.py    # IMA 知识库 API 客户端与数据模型
+│       ├── knowledge_cli.py    # `ima kb ...` 命令实现
+│       └── knowledge_upload.py # 文件预检、COS 签名和上传流程
 ├── tests/
+│   ├── _bootstrap.py           # 为 src 布局测试注入导入路径
 │   ├── test_cli.py             # CLI 命令行为与输出回归测试
-│   └── test_config.py          # 配置加载、优先级和缺失场景测试
+│   ├── test_config.py          # 配置加载、优先级和缺失场景测试
+│   └── test_knowledge_upload.py# 知识库上传预检与签名测试
 ├── .env                        # 本地开发凭证文件
 ├── .env.example                # `.env` 模板文件
 ├── .gitignore                  # Git 忽略规则
