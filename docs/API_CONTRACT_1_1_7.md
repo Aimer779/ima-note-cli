@@ -1,5 +1,7 @@
 # Notes API 1.1.7 契约裁决
 
+Knowledge 与媒体原文契约见 [KNOWLEDGE_MEDIA_CONTRACT_1_1_7.md](KNOWLEDGE_MEDIA_CONTRACT_1_1_7.md)。共享 HTTP 层要求对象型 `code/msg/data` envelope；成功 code 只接受整数 `0` 或字符串 `"0"`，读取接口最多尝试三次，写入接口不重试，成功 JSON 正文最大 4 MiB。
+
 状态：批次 A 已实施  
 依据：`ima-skills-1.1.7 (1)/notes/references/api.md` 与同版本 `notes/SKILL.md`  
 适用范围：`src/ima_note_cli/notes_api.py`、wire fixtures 与 Notes CLI

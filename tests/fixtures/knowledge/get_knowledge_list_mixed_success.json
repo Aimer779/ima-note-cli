@@ -1,0 +1,1 @@
+{"code":0,"msg":"ok","data":{"knowledge_list":[{"folder_id":"folder_test_1","name":"Folder","parent_folder_id":"","file_number":1,"folder_number":0,"is_top":false},{"media_id":"media_test_1","title":"File","parent_folder_id":"folder_test_1"}],"current_path":[],"next_cursor":"","is_end":true}}

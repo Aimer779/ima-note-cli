@@ -8,8 +8,9 @@ from time import time
 from typing import Any
 from urllib import error, parse, request
 
-from .http import ApiError
+from .errors import InputError, KnowledgeUploadError
 from .knowledge_api import CosCredential
+from .security import build_and_validate_cos_origin
 
 
 SAFE_URI_CHARS = "-_.!~*'()"
@@ -63,10 +64,6 @@ UNSUPPORTED_VIDEO_CT = {
 }
 
 
-class KnowledgeUploadError(RuntimeError):
-    """Raised when the COS upload flow fails."""
-
-
 @dataclass(frozen=True)
 class UploadFileInfo:
     file_path: Path
@@ -81,12 +78,12 @@ class UploadFileInfo:
 def inspect_upload_file(file_path: str, *, content_type: str | None = None) -> UploadFileInfo:
     path = Path(file_path).expanduser().resolve()
     if not path.is_file():
-        raise ValueError(f"File not found: {file_path}")
+        raise InputError(f"File not found: {file_path}")
 
     ext = path.suffix[1:].lower() if path.suffix else ""
     provided_content_type = (content_type or "").strip().lower()
     if ext in UNSUPPORTED_VIDEO_EXT or provided_content_type in UNSUPPORTED_VIDEO_CT:
-        raise ValueError("Video files are not supported. Only supported in the IMA desktop app.")
+        raise InputError("Video files are not supported. Only supported in the IMA desktop app.")
 
     resolved_media_type: int | None = None
     resolved_content_type: str | None = None
@@ -102,16 +99,16 @@ def inspect_upload_file(file_path: str, *, content_type: str | None = None) -> U
 
     if resolved_media_type is None:
         if not ext:
-            raise ValueError("File has no extension and no supported --content-type was provided.")
+            raise InputError("File has no extension and no supported --content-type was provided.")
         mapping = EXTENSION_MAP.get(ext)
         if mapping is None:
-            raise ValueError(f"Unrecognized file extension .{ext}. This file type is not supported.")
+            raise InputError(f"Unrecognized file extension .{ext}. This file type is not supported.")
         resolved_media_type, resolved_content_type = mapping
 
     stat = path.stat()
     size_limit = SIZE_LIMITS.get(resolved_media_type, DEFAULT_SIZE_LIMIT)
     if stat.st_size > size_limit:
-        raise ValueError(
+        raise InputError(
             f"File size {format_size(stat.st_size)} exceeds the {format_size(size_limit)} limit for this file type."
         )
 
@@ -128,7 +125,8 @@ def inspect_upload_file(file_path: str, *, content_type: str | None = None) -> U
 
 def upload_to_cos(file_info: UploadFileInfo, credential: CosCredential, *, timeout: int = 120) -> None:
     file_content = file_info.file_path.read_bytes()
-    hostname = f"{credential.bucket_name}.cos.{credential.region}.myqcloud.com"
+    origin = build_and_validate_cos_origin(credential.bucket_name, credential.region)
+    hostname = parse.urlsplit(origin).hostname or ""
     pathname = f"/{credential.cos_key}"
     authorization = build_cos_authorization(
         secret_id=credential.secret_id,
@@ -143,7 +141,7 @@ def upload_to_cos(file_info: UploadFileInfo, credential: CosCredential, *, timeo
         expired_time=credential.expired_time or int(time()) + 3600,
     )
     req = request.Request(
-        f"https://{hostname}{pathname}",
+        f"{origin}{pathname}",
         data=file_content,
         method="PUT",
         headers={
@@ -157,13 +155,21 @@ def upload_to_cos(file_info: UploadFileInfo, credential: CosCredential, *, timeo
         with request.urlopen(req, timeout=timeout) as response:
             status_code = getattr(response, "status", response.getcode())
     except error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace").strip()
-        raise KnowledgeUploadError(f"COS upload failed (HTTP {exc.code}): {detail or exc.reason}") from exc
+        try:
+            exc.read(16 * 1024)
+        except Exception:
+            pass
+        finally:
+            try:
+                exc.close()
+            except Exception:
+                pass
+        raise KnowledgeUploadError(f"COS upload failed with HTTP {exc.code}.", details={"http_status": exc.code}) from exc
     except error.URLError as exc:
-        raise KnowledgeUploadError(f"COS upload error: {exc.reason}") from exc
+        raise KnowledgeUploadError("COS upload could not reach the target host.", retryable=True) from exc
 
     if not 200 <= status_code < 300:
-        raise ApiError(f"COS upload failed with unexpected status {status_code}.")
+        raise KnowledgeUploadError(f"COS upload failed with unexpected status {status_code}.")
 
 
 def build_file_info_payload(file_info: UploadFileInfo, credential: CosCredential) -> dict[str, Any]:
@@ -222,3 +228,6 @@ def format_size(bytes_count: int) -> str:
     if bytes_count < MB:
         return f"{bytes_count / 1024:.1f} KB"
     return f"{bytes_count / MB:.1f} MB"
+
+
+__all__ = ["KnowledgeUploadError", "UploadFileInfo", "inspect_upload_file", "upload_to_cos"]

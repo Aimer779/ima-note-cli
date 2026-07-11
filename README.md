@@ -25,6 +25,7 @@
   - 将已有笔记添加到知识库
   - 导入 URL 到知识库
   - 上传本地文件到知识库
+  - 安全查看媒体元数据、读取文本原文并原子导出原文
 
 ## Skills
 
@@ -85,12 +86,14 @@ pip install -e .
 
 ## Credentials Configuration
 
-CLI 会按下面顺序读取凭证：
+CLI 按字段独立解析凭证，优先级为：进程环境变量 > 当前工作目录 `.env` > `~/.config/ima/client_id` 或 `~/.config/ima/api_key`。`ima auth` 只显示每个字段是否设置及来源，不显示凭证值。
 
-1. 项目根目录的 `.env`
-2. 进程环境变量
+也可以使用严格 UTF-8 的用户配置文件：
 
-如果两者同时存在，环境变量优先。
+```text
+~/.config/ima/client_id
+~/.config/ima/api_key
+```
 
 如果你是通过 `uv tool install` 全局安装后在任意目录使用 `ima`，推荐直接配置系统环境变量，而不是依赖当前目录下的 `.env`。
 
@@ -250,6 +253,19 @@ IMA_OPENAPI_APIKEY=your_api_key
 ```
 
 ## Usage
+
+机器调用可在命令末尾增加 `--json`。成功和失败都只输出一个 JSON 文档，公共字段为 `schema_version`、`ok`、`command`、`warnings`；失败时另含稳定的 `error` 对象且 stderr 为空。退出码：输入 2、配置 3、网络 4、IMA 业务 5、协议 6、原文/本地 I/O 7、上传 8、内部错误 70、中断 130。
+
+原文能力：
+
+```bash
+ima kb media-info --media-id "media_xxx"
+ima kb read --media-id "media_xxx"
+ima kb export --media-id "media_xxx" --output "./original.bin"
+ima kb export --media-id "media_xxx" --output "./original.bin" --force --json
+```
+
+`media-info` 永不显示完整访问 URL 或临时 header 值。`read` 只接受明确文本 MIME 且最大 4 MiB；二进制请使用 `export`。导出以 64 KiB 块处理，最大 200 MiB，默认拒绝覆盖，并通过同目录临时文件和原子替换保护已有文件。媒体 URL 不携带 IMA 长期凭证，临时 header 不允许跨源重定向。用户传给 `add-url` 的 URL 类型探测与“下载再上传”属于后续批次，不是这里的原文读取功能。
 
 查看帮助：
 

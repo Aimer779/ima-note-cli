@@ -1,0 +1,1 @@
+{"code":0,"msg":"ok","data":{"media_id":"media_test_upload","cos_credential":{"token":"fixture-token","secret_id":"fixture-id","secret_key":"fixture-key","start_time":1700000000,"expired_time":1700003600,"appid":"10000","bucket_name":"bucket-test-10000","region":"ap-test","custom_domain":"","cos_key":"fixture/path.txt"}}}

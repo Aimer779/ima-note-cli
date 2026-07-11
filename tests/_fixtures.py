@@ -9,7 +9,12 @@ FIXTURE_ROOT = Path(__file__).parent / "fixtures"
 
 
 def load_fixture(relative_path: str) -> dict[str, Any]:
-    value = json.loads((FIXTURE_ROOT / relative_path).read_text(encoding="utf-8"))
+    path = (FIXTURE_ROOT / relative_path).resolve()
+    try:
+        path.relative_to(FIXTURE_ROOT.resolve())
+    except ValueError as exc:
+        raise AssertionError(f"Fixture path escapes fixture root: {relative_path}") from exc
+    value = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(value, dict):
         raise AssertionError(f"Fixture must contain a JSON object: {relative_path}")
     return value

@@ -16,9 +16,12 @@ class RecordingNotesClient(NotesApiClient):
         self.responses = responses
         self.calls: list[tuple[str, dict]] = []
 
-    def post_json(self, endpoint: str, payload: dict):
+    def _record(self, endpoint: str, payload: dict):
         self.calls.append((endpoint, payload))
         return copy.deepcopy(self.responses[endpoint])
+
+    post_read_json = _record
+    post_write_json = _record
 
 
 class NotesApiContractTests(unittest.TestCase):
@@ -54,7 +57,7 @@ class NotesApiContractTests(unittest.TestCase):
         del data["search_note_infos"][0]["note_book_info"]["note_id"]
         with self.assertRaisesRegex(ApiError, "note_id"):
             RecordingNotesClient({"search_note": data}).search_notes("x", 1)
-        with self.assertRaisesRegex(ApiError, "non-array"):
+        with self.assertRaisesRegex(ApiError, "expected an array"):
             RecordingNotesClient({"search_note": {"search_note_infos": {}}}).search_notes("x", 1)
 
     def test_list_notebooks_supports_version_and_parses_metadata(self):

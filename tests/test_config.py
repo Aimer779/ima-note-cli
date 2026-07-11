@@ -7,7 +7,7 @@ import unittest
 from unittest.mock import patch
 
 from tests._bootstrap import ROOT  # noqa: F401
-from ima_note_cli.config import ConfigError, inspect_credentials, load_credentials, parse_dotenv
+from ima_note_cli.config import ConfigError, inspect_credentials, load_credentials, parse_dotenv, resolve_credentials
 
 
 class ParseDotenvTests(unittest.TestCase):
@@ -28,6 +28,22 @@ class ParseDotenvTests(unittest.TestCase):
 
 
 class LoadCredentialsTests(unittest.TestCase):
+    def test_user_config_fallback_and_field_priority(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir); config = root / "user"; config.mkdir()
+            (config / "client_id").write_text("user-client\n", encoding="utf-8")
+            (config / "api_key").write_text("user-key\n", encoding="utf-8")
+            (root / ".env").write_text("IMA_OPENAPI_APIKEY=dotenv-key\n", encoding="utf-8")
+            result = resolve_credentials(root, env={}, config_dir=config).status
+        self.assertEqual((result.client_id_source, result.api_key_source), ("user_config", "project_dotenv"))
+        self.assertEqual((result.client_id, result.api_key), ("user-client", "dotenv-key"))
+
+    def test_invalid_user_config_is_config_error(self) -> None:
+        with TemporaryDirectory() as tmp_dir:
+            root = Path(tmp_dir); config = root / "user"; config.mkdir()
+            (config / "client_id").write_bytes(b"\xff")
+            with self.assertRaises(ConfigError): resolve_credentials(root, env={}, config_dir=config)
+
     def test_inspect_credentials_reports_mixed_sources(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             root = Path(tmp_dir)
@@ -43,11 +59,11 @@ class LoadCredentialsTests(unittest.TestCase):
                 },
                 clear=True,
             ):
-                status = inspect_credentials(root)
+                status = inspect_credentials(root, config_dir=root / "user")
 
         self.assertTrue(status.client_id)
         self.assertTrue(status.api_key)
-        self.assertEqual(status.client_id_source, ".env")
+        self.assertEqual(status.client_id_source, "project_dotenv")
         self.assertEqual(status.api_key_source, "environment")
 
     def test_env_variables_override_dotenv(self) -> None:
@@ -67,7 +83,7 @@ class LoadCredentialsTests(unittest.TestCase):
                 },
                 clear=False,
             ):
-                credentials = load_credentials(root)
+                credentials = load_credentials(root, config_dir=root / "user")
 
         self.assertEqual(credentials.client_id, "env-client")
         self.assertEqual(credentials.api_key, "env-key")
@@ -84,15 +100,15 @@ class LoadCredentialsTests(unittest.TestCase):
             )
 
             with patch.dict(os.environ, {}, clear=True):
-                credentials = load_credentials(root)
+                credentials = load_credentials(root, config_dir=root / "user")
 
         self.assertEqual(credentials.client_id, "dotenv-client")
         self.assertEqual(credentials.api_key, "dotenv-key")
-        self.assertEqual(credentials.client_id_source, ".env")
-        self.assertEqual(credentials.api_key_source, ".env")
+        self.assertEqual(credentials.client_id_source, "project_dotenv")
+        self.assertEqual(credentials.api_key_source, "project_dotenv")
 
     def test_missing_credentials_raise_config_error(self) -> None:
         with TemporaryDirectory() as tmp_dir:
             with patch.dict(os.environ, {}, clear=True):
                 with self.assertRaises(ConfigError):
-                    load_credentials(Path(tmp_dir))
+                    load_credentials(Path(tmp_dir), config_dir=Path(tmp_dir) / "user")

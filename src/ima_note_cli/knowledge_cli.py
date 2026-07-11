@@ -5,8 +5,10 @@ import json
 import sys
 from urllib.parse import urlparse
 
+from .errors import InputError
 from .knowledge_api import KnowledgeBaseApiClient, KnowledgeBaseResult, KnowledgeBaseSummary, KnowledgeEntry
 from .knowledge_upload import build_file_info_payload, inspect_upload_file, upload_to_cos
+from .media_service import MediaContentService
 
 
 def add_kb_subcommands(subparsers: argparse._SubParsersAction[argparse.ArgumentParser]) -> None:
@@ -72,8 +74,25 @@ def add_kb_subcommands(subparsers: argparse._SubParsersAction[argparse.ArgumentP
     add_file_parser.add_argument("--json", action="store_true", dest="as_json", help="Print structured JSON.")
     add_file_parser.set_defaults(kb_action="add-file")
 
+    media_info = subparsers.add_parser("media-info", help="Inspect safe metadata for original media.")
+    media_info.add_argument("--media-id", required=True, help="Media ID.")
+    media_info.add_argument("--json", action="store_true", dest="as_json", help="Print structured JSON.")
+    media_info.set_defaults(kb_action="media-info")
 
-def handle_kb_command(args: argparse.Namespace, client: KnowledgeBaseApiClient) -> int:
+    read_parser = subparsers.add_parser("read", help="Read note or textual URL media.")
+    read_parser.add_argument("--media-id", required=True, help="Media ID.")
+    read_parser.add_argument("--json", action="store_true", dest="as_json", help="Print structured JSON.")
+    read_parser.set_defaults(kb_action="read")
+
+    export_parser = subparsers.add_parser("export", help="Export original media to a file.")
+    export_parser.add_argument("--media-id", required=True, help="Media ID.")
+    export_parser.add_argument("--output", required=True, help="Destination file path.")
+    export_parser.add_argument("--force", action="store_true", help="Replace an existing destination atomically.")
+    export_parser.add_argument("--json", action="store_true", dest="as_json", help="Print structured JSON.")
+    export_parser.set_defaults(kb_action="export")
+
+
+def handle_kb_command(args: argparse.Namespace, client: KnowledgeBaseApiClient, media_service: MediaContentService | None = None) -> int:
     if args.kb_action == "search-base":
         return handle_search_base(client, args.query, args.limit, args.cursor, args.as_json)
     if args.kb_action == "show-base":
@@ -99,7 +118,54 @@ def handle_kb_command(args: argparse.Namespace, client: KnowledgeBaseApiClient) 
         return handle_add_url(client, args.kb_id, args.urls, args.folder_id, args.as_json)
     if args.kb_action == "add-file":
         return handle_add_file(client, args.kb_id, args.file, args.folder_id, args.content_type, args.as_json)
-    raise ValueError("Unknown knowledge-base command.")
+    if args.kb_action in {"media-info", "read", "export"}:
+        if media_service is None:
+            raise RuntimeError("media service was not configured")
+        if args.kb_action == "media-info":
+            return handle_media_info(media_service, args.media_id, args.as_json)
+        if args.kb_action == "read":
+            return handle_media_read(media_service, args.media_id, args.as_json)
+        return handle_media_export(media_service, args.media_id, args.output, args.force, args.as_json)
+    raise InputError("Unknown knowledge-base command.")
+
+
+def handle_media_info(service: MediaContentService, media_id: str, as_json: bool) -> int:
+    payload = service.inspect_media(media_id).to_safe_dict()
+    if as_json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return 0
+    for key in ("media_id", "media_type", "source_kind", "available", "note_id", "safe_host"):
+        if key in payload:
+            print(f"{key}: {payload[key]}")
+    if payload.get("header_names"):
+        print("header_names: " + ", ".join(payload["header_names"]))
+    return 0
+
+
+def handle_media_read(service: MediaContentService, media_id: str, as_json: bool) -> int:
+    result = service.read_media(media_id)
+    payload = {"media_id": result.media_id, "media_type": result.media_type, "source_kind": result.source_kind,
+               "content_type": result.content_type, "content": result.content}
+    if as_json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(f"Source: {result.source_kind} ({result.content_type})")
+        print()
+        print(result.content)
+    return 0
+
+
+def handle_media_export(service: MediaContentService, media_id: str, output: str, force: bool, as_json: bool) -> int:
+    result = service.export_media(media_id, output, force=force)
+    payload = {"media_id": result.media_id, "media_type": result.media_type, "source_kind": result.source_kind,
+               "content_type": result.content_type, "output": result.output, "bytes": result.bytes_count, "sha256": result.sha256}
+    if as_json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(f"Exported: {result.output}")
+        print(f"Bytes: {result.bytes_count}")
+        print(f"SHA-256: {result.sha256}")
+    return 0
 
 
 def handle_search_base(
@@ -110,7 +176,7 @@ def handle_search_base(
     as_json: bool,
 ) -> int:
     if limit <= 0:
-        raise ValueError("--limit must be greater than 0.")
+        raise InputError("--limit must be between 1 and 20.")
     result = client.search_knowledge_bases(query, limit, cursor=cursor)
     if as_json:
         print(
@@ -137,7 +203,7 @@ def handle_search_base(
 def handle_show_base(client: KnowledgeBaseApiClient, knowledge_base_id: str, as_json: bool) -> int:
     result = client.get_knowledge_base(knowledge_base_id)
     if result is None:
-        raise ValueError(f"Knowledge base not found: {knowledge_base_id}")
+        raise InputError(f"Knowledge base not found: {knowledge_base_id}")
     if as_json:
         print(json.dumps(kb_detail_to_dict(result), ensure_ascii=False, indent=2))
         return 0
@@ -161,7 +227,7 @@ def handle_browse(
     as_json: bool,
 ) -> int:
     if limit <= 0:
-        raise ValueError("--limit must be greater than 0.")
+        raise InputError("--limit must be between 1 and 50.")
     result = client.list_knowledge(knowledge_base_id, limit, cursor=cursor, folder_id=folder_id)
     if as_json:
         print(
@@ -223,7 +289,7 @@ def handle_search(
 
 def handle_addable(client: KnowledgeBaseApiClient, limit: int, cursor: str, as_json: bool) -> int:
     if limit <= 0:
-        raise ValueError("--limit must be greater than 0.")
+        raise InputError("--limit must be between 1 and 50.")
     result = client.list_addable_knowledge_bases(limit, cursor=cursor)
     if as_json:
         print(
@@ -325,7 +391,7 @@ def handle_add_file(
         folder_id=folder_id,
     )
     if any(item.is_repeated for item in repeated):
-        raise ValueError(f"File already exists in the target knowledge base: {file_info.file_name}")
+        raise InputError(f"File already exists in the target knowledge base: {file_info.file_name}")
     media = client.create_media(
         knowledge_base_id,
         file_name=file_info.file_name,
@@ -441,21 +507,21 @@ def import_url_result_to_dict(item: object) -> dict[str, object]:
 
 def validate_urls(urls: list[str]) -> None:
     if not urls:
-        raise ValueError("At least one --url is required.")
+        raise InputError("At least one --url is required.")
     if len(urls) > 10:
-        raise ValueError("No more than 10 URLs can be imported at once.")
+        raise InputError("No more than 10 URLs can be imported at once.")
     for url in urls:
         parsed = urlparse(url)
         if parsed.scheme not in {"http", "https"}:
-            raise ValueError(f"Unsupported URL scheme: {url}")
+            raise InputError("A URL uses an unsupported scheme; only HTTP and HTTPS are accepted.")
         if url.startswith("file://"):
-            raise ValueError("Local HTML files are not supported. Only supported in the IMA desktop app.")
+            raise InputError("Local HTML files are not supported. Only supported in the IMA desktop app.")
         normalized_host = parsed.netloc.lower()
         normalized_path = parsed.path.lower()
         if normalized_host == "www.bilibili.com" and normalized_path.startswith("/video/"):
-            raise ValueError("Bilibili video URLs are not supported. Only supported in the IMA desktop app.")
+            raise InputError("Bilibili video URLs are not supported. Only supported in the IMA desktop app.")
         if normalized_host == "www.youtube.com" and normalized_path == "/watch":
-            raise ValueError("YouTube video URLs are not supported. Only supported in the IMA desktop app.")
+            raise InputError("YouTube video URLs are not supported. Only supported in the IMA desktop app.")
         file_ext = normalized_path.rsplit(".", 1)[-1] if "." in normalized_path else ""
         if file_ext in {"pdf", "doc", "docx", "ppt", "pptx", "xls", "xlsx", "csv", "md", "markdown", "txt", "xmind"}:
-            raise ValueError(f"File-like URL detected: {url}. Download it first and use `ima kb add-file`.")
+            raise InputError("A file-like URL was detected. Download it first and use `ima kb add-file`.")

@@ -1,0 +1,1 @@
+{"code":0,"msg":"ok","data":{"results":{"https://ima.qq.com/test/article":{"ret_code":0,"media_id":"media_test_url"},"https://ima.qq.com/test/fail":{"ret_code":1001,"media_id":""}}}}

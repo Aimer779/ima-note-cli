@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import sys
 
+from .errors import InputError
 from .notes_api import FolderResult, NotesApiClient, SearchResult
 from .notes_content import PreparedNoteMarkdown, prepare_note_markdown
 
@@ -112,7 +113,7 @@ def handle_note_command(args: argparse.Namespace, client: NotesApiClient) -> int
         return handle_create(client, args.title, args.content, args.file, args.folder_id, args.as_json)
     if args.note_action == "append":
         return handle_append(client, args.note_id, args.content, args.file, args.as_json)
-    raise ValueError("Unknown note command.")
+    raise InputError("Unknown note command.")
 
 
 def handle_search(
@@ -127,7 +128,7 @@ def handle_search(
 ) -> int:
     validate_limit(limit)
     if start < 0:
-        raise ValueError("--start must be greater than or equal to 0.")
+        raise InputError("--start must be greater than or equal to 0.")
 
     result = client.search_notes(
         query,
@@ -366,22 +367,22 @@ def format_timestamp(timestamp_ms: int | None) -> str:
 def load_markdown_input(content: str | None, file_path: str | None) -> str:
     if content is not None:
         if not content.strip():
-            raise ValueError("Content cannot be empty.")
+            raise InputError("Content cannot be empty.")
         return content
 
     if file_path is None:
-        raise ValueError("Either --content or --file is required.")
+        raise InputError("Either --content or --file is required.")
 
     path = Path(file_path)
     if not path.is_file():
-        raise ValueError(f"File not found: {file_path}")
+        raise InputError(f"File not found: {file_path}")
 
     try:
         loaded = path.read_text(encoding="utf-8")
     except UnicodeDecodeError as exc:
-        raise ValueError(f"Content file must be valid UTF-8: {file_path}") from exc
+        raise InputError(f"Content file must be valid UTF-8: {file_path}") from exc
     if not loaded.strip():
-        raise ValueError("Content file is empty.")
+        raise InputError("Content file is empty.")
     return loaded
 
 
@@ -390,7 +391,7 @@ def compose_markdown(title: str | None, body: str) -> str:
         return body
     title_text = title.strip()
     if not title_text:
-        raise ValueError("--title cannot be empty.")
+        raise InputError("--title cannot be empty.")
     body_text = body.strip()
     if not body_text:
         return f"# {title_text}"
@@ -399,7 +400,7 @@ def compose_markdown(title: str | None, body: str) -> str:
 
 def validate_limit(limit: int) -> None:
     if not 1 <= limit <= 20:
-        raise ValueError("--limit must be between 1 and 20.")
+        raise InputError("--limit must be between 1 and 20.")
 
 
 def with_preparation_diagnostics(

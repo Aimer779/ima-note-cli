@@ -23,14 +23,14 @@ class FakeResponse:
     def __exit__(self, *args):
         return False
 
-    def read(self) -> bytes:
-        return self.body
+    def read(self, size: int = -1) -> bytes:
+        return self.body if size < 0 else self.body[:size]
 
 
 class HttpContractTests(unittest.TestCase):
     def setUp(self) -> None:
         credentials = Credentials("client-test", "key-test", "test", "test")
-        self.client = ImaApiClient(credentials, base_url="https://example.com/api", timeout=4)
+        self.client = ImaApiClient(credentials, base_url="https://ima.qq.com/openapi/note/v1", timeout=4)
 
     def post(self, value):
         body = value if isinstance(value, bytes) else json.dumps(value).encode("utf-8")
@@ -71,13 +71,13 @@ class HttpContractTests(unittest.TestCase):
     def test_non_object_data_fails(self):
         with self.assertRaisesRegex(ApiError, "non-object data"):
             self.post(load_fixture("notes/malformed_data_array.json"))
-        with self.assertRaisesRegex(ApiError, "missing.*data"):
+        with self.assertRaisesRegex(ApiError, "non-object data"):
             self.post({"code": 0, "result": {}})
 
     def test_invalid_json_and_non_object_top_level_fail(self):
         with self.assertRaisesRegex(ApiError, "invalid JSON"):
             self.post(b"not json")
-        with self.assertRaisesRegex(ApiError, "unexpected response shape"):
+        with self.assertRaisesRegex(ApiError, "non-object response"):
             self.post([])
 
     def test_non_utf8_response_is_wrapped_as_api_error(self):

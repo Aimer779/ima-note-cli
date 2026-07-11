@@ -1,23 +1,32 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 import json
 import os
 from pathlib import Path
 import sys
 from typing import Sequence
 
-from .config import ConfigError, CredentialStatus, inspect_credentials, load_credentials
-from .http import ApiError
+from .config import CredentialStatus, Credentials, inspect_credentials, load_credentials
+from .errors import ConfigError, ImaCliError, InputError
 from .knowledge_api import KnowledgeBaseApiClient
 from .knowledge_cli import add_kb_subcommands, handle_kb_command
-from .knowledge_upload import KnowledgeUploadError
+from .media_service import MediaContentService
 from .notes_api import NotesApiClient
 from .notes_cli import add_note_subcommands, handle_note_command
+from .output import emit_human_error, emit_json_error, emit_json_success
+from .source_http import SourceHttpClient
+
+
+class CliArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        raise InputError(message, code="usage_error")
 
 
 def build_parser(*, prog: str = "ima") -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
+    parser = CliArgumentParser(
         prog=prog,
         description="Manage IMA notes and knowledge bases from the command line.",
     )
@@ -36,25 +45,83 @@ def build_parser(*, prog: str = "ima") -> argparse.ArgumentParser:
 
 
 def run(argv: Sequence[str] | None = None) -> int:
+    argv_list = list(argv) if argv is not None else list(sys.argv[1:])
+    as_json = "--json" in argv_list
+    command_name = _command_name(argv_list)
     parser = build_parser()
-    args = parser.parse_args(argv)
-
     try:
+        args = parser.parse_args(argv_list)
+        command_name = _command_name_from_args(args)
         status = inspect_credentials(Path.cwd())
         if args.command == "auth":
-            return handle_auth(status, args.as_json)
+            if not status.is_configured:
+                if not as_json:
+                    return handle_auth(status, False)
+                raise ConfigError("IMA credentials are not fully configured.")
+            return _run_handler(lambda: handle_auth(status, args.as_json), command_name, as_json)
 
-        credentials = load_credentials(Path.cwd())
+        if not status.is_configured:
+            raise ConfigError("IMA credentials are not fully configured.")
+        credentials = Credentials(
+            status.client_id, status.api_key,
+            status.client_id_source or "unknown", status.api_key_source or "unknown",
+        )
         if args.command == "note":
-            return handle_note_command(args, NotesApiClient(credentials))
+            return _run_handler(lambda: handle_note_command(args, NotesApiClient(credentials)), command_name, as_json)
         if args.command == "kb":
-            return handle_kb_command(args, KnowledgeBaseApiClient(credentials))
-    except (ConfigError, ApiError, KnowledgeUploadError, ValueError) as exc:
-        print(f"Error: {exc}", file=sys.stderr)
-        return 1
+            knowledge = KnowledgeBaseApiClient(credentials)
+            media_service = None
+            if args.kb_action in {"media-info", "read", "export"}:
+                media_service = MediaContentService(knowledge, NotesApiClient(credentials), SourceHttpClient())
+            return _run_handler(lambda: handle_kb_command(args, knowledge, media_service), command_name, as_json)
+        raise InputError("Unknown command.")
+    except KeyboardInterrupt:
+        error = ImaCliError("Interrupted.", code="interrupted", exit_code=130)
+    except ImaCliError as exc:
+        error = exc
+    except Exception:
+        error = ImaCliError("An unexpected internal error occurred.", code="internal_error", exit_code=70)
+    if as_json:
+        emit_json_error(command_name, error)
+    else:
+        emit_human_error(error)
+    return error.exit_code
 
-    parser.error("Unknown command")
-    return 2
+
+def _run_handler(callback: object, command: str, as_json: bool) -> int:
+    if not as_json:
+        return callback()  # type: ignore[operator]
+    stdout, stderr = StringIO(), StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        exit_code = callback()  # type: ignore[operator]
+    if exit_code:
+        raise ImaCliError("The command failed without a classified error.", code="internal_error", exit_code=70)
+    raw = stdout.getvalue().strip()
+    try:
+        payload = json.loads(raw) if raw else {}
+    except json.JSONDecodeError as exc:
+        raise ImaCliError("The command produced invalid internal JSON.", code="internal_error", exit_code=70) from exc
+    if not isinstance(payload, dict):
+        raise ImaCliError("The command produced invalid internal JSON.", code="internal_error", exit_code=70)
+    emit_json_success(command, payload)
+    return 0
+
+
+def _command_name(argv: Sequence[str]) -> str:
+    values = [value for value in argv if not value.startswith("-")]
+    if not values:
+        return "cli"
+    if values[0] in {"note", "kb"} and len(values) > 1:
+        return f"{values[0]}.{values[1]}"
+    return values[0] if values[0] in {"auth"} else "cli"
+
+
+def _command_name_from_args(args: argparse.Namespace) -> str:
+    if args.command == "note":
+        return f"note.{args.note_action}"
+    if args.command == "kb":
+        return f"kb.{args.kb_action}"
+    return args.command
 
 
 def run_note_legacy(argv: Sequence[str] | None = None) -> int:
@@ -83,7 +150,7 @@ def handle_auth(status: CredentialStatus, as_json: bool) -> int:
 
     if as_json:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
-        return 0 if status.is_configured else 1
+        return 0
 
     print(f"Status: {'configured' if status.is_configured else 'missing credentials'}")
     print(
@@ -102,8 +169,8 @@ def handle_auth(status: CredentialStatus, as_json: bool) -> int:
         return 0
 
     print()
-    print("Configure the missing values in the environment or a project-root .env file.", file=sys.stderr)
-    return 1
+    print("Configure the missing values in the environment, project .env, or ~/.config/ima files.", file=sys.stderr)
+    return 3
 
 
 def format_source_suffix(source: str | None) -> str:

@@ -31,6 +31,9 @@ Command layout:
   - `ima kb add-note`
   - `ima kb add-url`
   - `ima kb add-file`
+  - `ima kb media-info`
+  - `ima kb read`
+  - `ima kb export`
 
 Compatibility:
 
@@ -62,10 +65,11 @@ IMA_OPENAPI_CLIENTID=your_client_id
 IMA_OPENAPI_APIKEY=your_api_key
 ```
 
-Use this precedence rule:
+Use this precedence rule per field:
 
-1. Current working directory `.env`
-2. Process environment variables
+1. Process environment variables
+2. Current working directory `.env`
+3. `~/.config/ima/client_id` and `~/.config/ima/api_key`
 
 When the CLI is installed via `uv tool`, prefer system environment variables because users will run `ima` from arbitrary directories.
 
@@ -149,10 +153,18 @@ Use these commands for normal operation:
   - `ima kb add-url --kb-id "kb_xxx" --url "https://example.com/article"`
 - Upload a local file into a knowledge base:
   - `ima kb add-file --kb-id "kb_xxx" --file "./report.pdf"`
+- Inspect safe original-media metadata:
+  - `ima kb media-info --media-id "media_xxx"`
+- Read note or textual URL media:
+  - `ima kb read --media-id "media_xxx"`
+- Export media without overwriting an existing file:
+  - `ima kb export --media-id "media_xxx" --output "./original.bin"`
 - Emit JSON for scripting:
   - Add `--json` to `auth`, note subcommands, or kb subcommands that support machine-readable output
 
 Before note create or append, the CLI validates UTF-8 and removes local/data/non-HTTP(S) image references. Human mode reports removed paths on stderr; JSON mode reports them in `warnings` and `removed_local_images` without contaminating stdout.
+
+JSON success and failure are single documents with `schema_version`, `ok`, `command`, and `warnings`; JSON failures keep stderr empty. Never print or request full signed media URLs, Authorization/Cookie values, IMA credentials, or COS temporary secrets. `kb read` accepts only bounded textual content; use `kb export` for binary media. Export defaults to no overwrite and `--force` still uses atomic replacement.
 
 When the user is in a local checkout and prefers not to install globally, replace `ima ...` with `uv run python -m ima_note_cli ...`.
 

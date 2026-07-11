@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 import re
 
+from .errors import InputError
+
 
 FENCE_OPEN_RE = re.compile(r"^[ ]{0,3}(`{3,}|~{3,})")
 REFERENCE_DEFINITION_RE = re.compile(r"^[ \t]{0,3}\[([^\]\n]+)\]:[ \t]*(.*)$")
@@ -24,11 +26,11 @@ class _ImageToken:
 
 def ensure_valid_utf8(value: str, field_name: str) -> None:
     if not isinstance(value, str):
-        raise ValueError(f"{field_name} must be a string.")
+        raise InputError(f"{field_name} must be a string.")
     try:
         value.encode("utf-8", errors="strict")
     except UnicodeEncodeError as exc:
-        raise ValueError(f"{field_name} must contain valid UTF-8 text.") from exc
+        raise InputError(f"{field_name} must contain valid UTF-8 text.") from exc
 
 
 def _normalise_reference_label(value: str) -> str:
@@ -334,7 +336,7 @@ def prepare_note_markdown(content: str) -> PreparedNoteMarkdown:
     cleaned = "".join(output)
     ensure_valid_utf8(cleaned, "content")
     if not _has_visible_content(cleaned):
-        raise ValueError("Content is empty after removing unsupported local images.")
+        raise InputError("Content is empty after removing unsupported local images.")
     warnings: tuple[str, ...] = ()
     if removed:
         warnings = ("Local images are not supported and were removed before writing the note.",)

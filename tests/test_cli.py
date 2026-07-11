@@ -486,7 +486,7 @@ class CliTests(unittest.TestCase):
                         with redirect_stdout(stdout), redirect_stderr(stderr):
                             code = run(["note", "create", "--file", str(note_path)])
 
-        self.assertEqual(code, 1)
+        self.assertEqual(code, 2)
         self.assertIn("valid UTF-8", stderr.getvalue())
         self.assertIsNone(fake_client.last_create_call)
 
@@ -612,5 +612,5 @@ class CliTests(unittest.TestCase):
                     with redirect_stdout(stdout), redirect_stderr(stderr):
                         code = run(["note", "search", "会议"])
 
-        self.assertEqual(code, 1)
+        self.assertEqual(code, 5)
         self.assertIn("Error: boom", stderr.getvalue())
