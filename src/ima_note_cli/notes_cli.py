@@ -5,8 +5,10 @@ from datetime import datetime, timezone
 import json
 from pathlib import Path
 import re
+import sys
 
 from .notes_api import FolderResult, NotesApiClient, SearchResult
+from .notes_content import PreparedNoteMarkdown, prepare_note_markdown
 
 
 HTML_TAG_RE = re.compile(r"<[^>]+>")
@@ -56,12 +58,18 @@ def add_note_subcommands(subparsers: argparse._SubParsersAction[argparse.Argumen
     list_parser = subparsers.add_parser("list", help="List notes within a folder or the root notes view.")
     list_parser.add_argument("--folder-id", default="", help="Folder ID to list. Omit for the root notes view.")
     list_parser.add_argument("--cursor", default="", help='Cursor for note pagination (default: "").')
+    list_parser.add_argument(
+        "--sort",
+        choices=tuple(SORT_TYPE_MAP.keys()),
+        default="updated",
+        help="Sort order for notes (default: updated).",
+    )
     list_parser.add_argument("--limit", type=int, default=20, help="Maximum number of notes to request.")
     list_parser.add_argument("--json", action="store_true", dest="as_json", help="Print structured JSON.")
     list_parser.set_defaults(note_action="list")
 
     get_parser = subparsers.add_parser("get", help="Read a note's plain-text content.")
-    get_parser.add_argument("doc_id", help="Document ID returned by search.")
+    get_parser.add_argument("note_id", help="Note ID returned by search.")
     get_parser.add_argument("--json", action="store_true", dest="as_json", help="Print structured JSON.")
     get_parser.set_defaults(note_action="get")
 
@@ -75,7 +83,7 @@ def add_note_subcommands(subparsers: argparse._SubParsersAction[argparse.Argumen
     create_parser.set_defaults(note_action="create")
 
     append_parser = subparsers.add_parser("append", help="Append Markdown content to an existing note.")
-    append_parser.add_argument("doc_id", help="Document ID to append to.")
+    append_parser.add_argument("note_id", help="Note ID to append to.")
     append_parser_content = append_parser.add_mutually_exclusive_group(required=True)
     append_parser_content.add_argument("--content", help="Markdown content to append.")
     append_parser_content.add_argument("--file", help="Path to a UTF-8 Markdown file with the content to append.")
@@ -97,13 +105,13 @@ def handle_note_command(args: argparse.Namespace, client: NotesApiClient) -> int
     if args.note_action == "folders":
         return handle_folders(client, args.limit, args.cursor, args.as_json)
     if args.note_action == "list":
-        return handle_list(client, args.limit, args.folder_id, args.cursor, args.as_json)
+        return handle_list(client, args.limit, args.folder_id, args.cursor, args.as_json, sort=args.sort)
     if args.note_action == "get":
-        return handle_get(client, args.doc_id, args.as_json)
+        return handle_get(client, args.note_id, args.as_json)
     if args.note_action == "create":
         return handle_create(client, args.title, args.content, args.file, args.folder_id, args.as_json)
     if args.note_action == "append":
-        return handle_append(client, args.doc_id, args.content, args.file, args.as_json)
+        return handle_append(client, args.note_id, args.content, args.file, args.as_json)
     raise ValueError("Unknown note command.")
 
 
@@ -117,8 +125,7 @@ def handle_search(
     search_type: str,
     sort: str,
 ) -> int:
-    if limit <= 0:
-        raise ValueError("--limit must be greater than 0.")
+    validate_limit(limit)
     if start < 0:
         raise ValueError("--start must be greater than or equal to 0.")
 
@@ -151,13 +158,13 @@ def handle_search(
     return 0
 
 
-def handle_get(client: NotesApiClient, doc_id: str, as_json: bool) -> int:
-    result = client.get_doc_content(doc_id)
+def handle_get(client: NotesApiClient, note_id: str, as_json: bool) -> int:
+    result = client.get_doc_content(note_id)
     if as_json:
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
 
-    print(f"Doc ID: {result['doc_id']}")
+    print(f"note_id: {result['note_id']}")
     print()
     content = result["content"].rstrip()
     print(content if content else "(empty)")
@@ -165,8 +172,7 @@ def handle_get(client: NotesApiClient, doc_id: str, as_json: bool) -> int:
 
 
 def handle_folders(client: NotesApiClient, limit: int, cursor: str, as_json: bool) -> int:
-    if limit <= 0:
-        raise ValueError("--limit must be greater than 0.")
+    validate_limit(limit)
 
     result = client.list_folders(limit, cursor=cursor)
     if as_json:
@@ -206,11 +212,18 @@ def handle_folders(client: NotesApiClient, limit: int, cursor: str, as_json: boo
     return 0
 
 
-def handle_list(client: NotesApiClient, limit: int, folder_id: str, cursor: str, as_json: bool) -> int:
-    if limit <= 0:
-        raise ValueError("--limit must be greater than 0.")
+def handle_list(
+    client: NotesApiClient,
+    limit: int,
+    folder_id: str,
+    cursor: str,
+    as_json: bool,
+    *,
+    sort: str = "updated",
+) -> int:
+    validate_limit(limit)
 
-    result = client.list_notes(limit, folder_id=folder_id, cursor=cursor)
+    result = client.list_notes(limit, folder_id=folder_id, cursor=cursor, sort_type=SORT_TYPE_MAP[sort])
     if as_json:
         print(
             json.dumps(
@@ -219,6 +232,7 @@ def handle_list(client: NotesApiClient, limit: int, folder_id: str, cursor: str,
                     "cursor": cursor,
                     "next_cursor": result["next_cursor"],
                     "is_end": result["is_end"],
+                    "sort": sort,
                     "notes": [search_result_to_dict(note) for note in result["notes"]],
                 },
                 ensure_ascii=False,
@@ -250,31 +264,35 @@ def handle_create(
 ) -> int:
     markdown_body = load_markdown_input(content, file_path)
     markdown = compose_markdown(title, markdown_body)
-    result = client.create_note(markdown, folder_id=folder_id or None)
+    prepared = prepare_note_markdown(markdown)
+    result = client.create_note(prepared.content, folder_id=folder_id or None)
     if as_json:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(json.dumps(with_preparation_diagnostics(result, prepared), ensure_ascii=False, indent=2))
         return 0
 
-    print(f"Created note: {result['doc_id']}")
+    print(f"Created note: {result['note_id']}")
     if result["folder_id"]:
         print(f"Folder: {result['folder_id']}")
+    print_preparation_warnings(prepared)
     return 0
 
 
 def handle_append(
     client: NotesApiClient,
-    doc_id: str,
+    note_id: str,
     content: str | None,
     file_path: str | None,
     as_json: bool,
 ) -> int:
     markdown = load_markdown_input(content, file_path)
-    result = client.append_note(doc_id, markdown)
+    prepared = prepare_note_markdown(markdown)
+    result = client.append_note(note_id, prepared.content)
     if as_json:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        print(json.dumps(with_preparation_diagnostics(result, prepared), ensure_ascii=False, indent=2))
         return 0
 
-    print(f"Appended to note: {result['doc_id']}")
+    print(f"Appended to note: {result['note_id']}")
+    print_preparation_warnings(prepared)
     return 0
 
 
@@ -295,7 +313,7 @@ def print_note_summaries(docs: list[SearchResult]) -> None:
         summary = clean_text(doc.summary)
         modify_time = format_timestamp(doc.modify_time)
         print(f"{index}. {title}")
-        print(f"   doc_id: {doc.doc_id}")
+        print(f"   note_id: {doc.note_id}")
         if doc.folder_name:
             print(f"   folder: {doc.folder_name}")
         if modify_time:
@@ -307,6 +325,7 @@ def print_note_summaries(docs: list[SearchResult]) -> None:
 
 def search_result_to_dict(result: SearchResult) -> dict[str, object]:
     return {
+        "note_id": result.note_id,
         "doc_id": result.doc_id,
         "title": result.title,
         "summary": result.summary,
@@ -314,6 +333,7 @@ def search_result_to_dict(result: SearchResult) -> dict[str, object]:
         "folder_name": result.folder_name,
         "create_time": result.create_time,
         "modify_time": result.modify_time,
+        "cover_image": result.cover_image,
         "status": result.status,
         "highlight_title": result.highlight_title,
     }
@@ -356,7 +376,10 @@ def load_markdown_input(content: str | None, file_path: str | None) -> str:
     if not path.is_file():
         raise ValueError(f"File not found: {file_path}")
 
-    loaded = path.read_text(encoding="utf-8")
+    try:
+        loaded = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError as exc:
+        raise ValueError(f"Content file must be valid UTF-8: {file_path}") from exc
     if not loaded.strip():
         raise ValueError("Content file is empty.")
     return loaded
@@ -372,3 +395,27 @@ def compose_markdown(title: str | None, body: str) -> str:
     if not body_text:
         return f"# {title_text}"
     return f"# {title_text}\n\n{body_text}"
+
+
+def validate_limit(limit: int) -> None:
+    if not 1 <= limit <= 20:
+        raise ValueError("--limit must be between 1 and 20.")
+
+
+def with_preparation_diagnostics(
+    result: dict[str, object], prepared: PreparedNoteMarkdown
+) -> dict[str, object]:
+    return {
+        **result,
+        "warnings": list(prepared.warnings),
+        "removed_local_images": list(prepared.removed_local_images),
+    }
+
+
+def print_preparation_warnings(prepared: PreparedNoteMarkdown) -> None:
+    for warning in prepared.warnings:
+        print(f"Warning: {warning}", file=sys.stderr)
+    if prepared.removed_local_images:
+        print("Removed local images:", file=sys.stderr)
+        for image in prepared.removed_local_images:
+            print(f"- {image}", file=sys.stderr)

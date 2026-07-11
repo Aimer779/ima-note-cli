@@ -4,7 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 
-from _bootstrap import ROOT  # noqa: F401
+from tests._bootstrap import ROOT  # noqa: F401
 from ima_note_cli.knowledge_upload import build_cos_authorization, inspect_upload_file
 
 

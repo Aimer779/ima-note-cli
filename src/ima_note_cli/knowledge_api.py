@@ -181,12 +181,15 @@ class KnowledgeBaseApiClient(ImaApiClient):
             "knowledge_base_id": knowledge_base_id,
         }
 
-    def add_note(self, knowledge_base_id: str, doc_id: str, *, title: str, folder_id: str | None = None) -> dict[str, Any]:
+    def add_note(self, knowledge_base_id: str, note_id: str, *, title: str, folder_id: str | None = None) -> dict[str, Any]:
+        if not isinstance(note_id, str) or not note_id.strip():
+            raise ValueError("note_id cannot be empty.")
+        note_id = note_id.strip()
         payload: dict[str, Any] = {
             "media_type": 11,
             "title": title,
             "knowledge_base_id": knowledge_base_id,
-            "note_info": {"content_id": doc_id},
+            "note_info": {"content_id": note_id},
         }
         if folder_id:
             payload["folder_id"] = folder_id
@@ -195,7 +198,8 @@ class KnowledgeBaseApiClient(ImaApiClient):
             "media_id": str(data.get("media_id", "")),
             "knowledge_base_id": knowledge_base_id,
             "folder_id": folder_id or "",
-            "doc_id": doc_id,
+            "note_id": note_id,
+            "doc_id": note_id,
             "title": title,
         }
 

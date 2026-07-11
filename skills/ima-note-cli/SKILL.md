@@ -35,6 +35,8 @@ Command layout:
 Compatibility:
 
 - `ima-note` still exists as a legacy note-only entry point
+- `note_id` is the canonical identifier; JSON temporarily includes an equal deprecated `doc_id` field
+- `ima kb add-note --doc-id` remains a deprecated alias for `--note-id` during the compatibility period
 - Prefer documenting and recommending `ima ...` going forward
 
 ## Quick Start
@@ -124,13 +126,13 @@ Use these commands for normal operation:
 - List notes under a folder:
   - `ima note list --folder-id "user_list_xxx"`
 - Read note content:
-  - `ima note get "your_doc_id"`
+  - `ima note get "your_note_id"`
 - Create a note from inline Markdown:
   - `ima note create --title "Test Title" --content "Body content"`
 - Create a note from a file:
   - `ima note create --file "./note.md" --folder-id "folder_id"`
 - Append Markdown to a note:
-  - `ima note append "your_doc_id" --content "\n## Update\n\nAppended text"`
+  - `ima note append "your_note_id" --content "\n## Update\n\nAppended text"`
 - Search knowledge bases:
   - `ima kb search-base "product docs"`
 - Show a knowledge base:
@@ -142,13 +144,15 @@ Use these commands for normal operation:
 - List addable knowledge bases:
   - `ima kb addable`
 - Add a note to a knowledge base:
-  - `ima kb add-note --kb-id "kb_xxx" --doc-id "doc_xxx" --title "Meeting Notes"`
+  - `ima kb add-note --kb-id "kb_xxx" --note-id "note_xxx" --title "Meeting Notes"`
 - Import a URL into a knowledge base:
   - `ima kb add-url --kb-id "kb_xxx" --url "https://example.com/article"`
 - Upload a local file into a knowledge base:
   - `ima kb add-file --kb-id "kb_xxx" --file "./report.pdf"`
 - Emit JSON for scripting:
   - Add `--json` to `auth`, note subcommands, or kb subcommands that support machine-readable output
+
+Before note create or append, the CLI validates UTF-8 and removes local/data/non-HTTP(S) image references. Human mode reports removed paths on stderr; JSON mode reports them in `warnings` and `removed_local_images` without contaminating stdout.
 
 When the user is in a local checkout and prefers not to install globally, replace `ima ...` with `uv run python -m ima_note_cli ...`.
 

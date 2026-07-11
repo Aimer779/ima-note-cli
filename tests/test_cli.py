@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
-from _bootstrap import ROOT  # noqa: F401
+from tests._bootstrap import ROOT  # noqa: F401
 from ima_note_cli.api import (
     ApiError,
     FolderResult,
@@ -33,11 +33,11 @@ class FakeNotesClient:
         error: Exception | None = None,
     ) -> None:
         self._search_result = search_result or {"docs": [], "total_hit_num": 0, "is_end": True}
-        self._get_result = get_result or {"doc_id": "doc-1", "content": ""}
+        self._get_result = get_result or {"note_id": "note-1", "doc_id": "note-1", "content": ""}
         self._folders_result = folders_result or {"folders": [], "next_cursor": "", "is_end": True}
         self._notes_result = notes_result or {"notes": [], "next_cursor": "", "is_end": True, "folder_id": ""}
-        self._create_result = create_result or {"doc_id": "doc-created", "folder_id": ""}
-        self._append_result = append_result or {"doc_id": "doc-appended"}
+        self._create_result = create_result or {"note_id": "note-created", "doc_id": "note-created", "folder_id": ""}
+        self._append_result = append_result or {"note_id": "note-appended", "doc_id": "note-appended"}
         self._error = error
         self.last_search_call = None
         self.last_list_notes_call = None
@@ -50,7 +50,7 @@ class FakeNotesClient:
         self.last_search_call = {"query": query, "limit": limit, **kwargs}
         return self._search_result
 
-    def get_doc_content(self, doc_id: str):
+    def get_doc_content(self, note_id: str):
         if self._error:
             raise self._error
         return self._get_result
@@ -60,10 +60,10 @@ class FakeNotesClient:
             raise self._error
         return self._folders_result
 
-    def list_notes(self, limit: int, *, folder_id: str = "", cursor: str = ""):
+    def list_notes(self, limit: int, *, folder_id: str = "", cursor: str = "", sort_type: int = 0):
         if self._error:
             raise self._error
-        self.last_list_notes_call = {"limit": limit, "folder_id": folder_id, "cursor": cursor}
+        self.last_list_notes_call = {"limit": limit, "folder_id": folder_id, "cursor": cursor, "sort_type": sort_type}
         return self._notes_result
 
     def create_note(self, content: str, *, folder_id: str | None = None):
@@ -72,10 +72,10 @@ class FakeNotesClient:
         self.last_create_call = {"content": content, "folder_id": folder_id}
         return self._create_result
 
-    def append_note(self, doc_id: str, content: str):
+    def append_note(self, note_id: str, content: str):
         if self._error:
             raise self._error
-        self.last_append_call = {"doc_id": doc_id, "content": content}
+        self.last_append_call = {"note_id": note_id, "content": content}
         return self._append_result
 
 
@@ -96,10 +96,11 @@ class FakeKnowledgeClient:
         self._browse_result = browse_result or {"items": [], "next_cursor": "", "is_end": True, "current_path": []}
         self._search_result = search_result or {"items": [], "next_cursor": "", "is_end": True}
         self._addable_result = addable_result or {"knowledge_bases": [], "next_cursor": "", "is_end": True}
-        self._add_note_result = add_note_result or {"media_id": "media-1", "knowledge_base_id": "kb-1", "doc_id": "doc-1", "title": "doc-1", "folder_id": ""}
+        self._add_note_result = add_note_result or {"media_id": "media-1", "knowledge_base_id": "kb-1", "note_id": "note-1", "doc_id": "note-1", "title": "note-1", "folder_id": ""}
         self._import_urls_result = import_urls_result or {"results": [], "knowledge_base_id": "kb-1", "folder_id": ""}
         self._error = error
         self.last_import_urls_call = None
+        self.last_add_note_call = None
 
     def search_knowledge_bases(self, query: str, limit: int, *, cursor: str = ""):
         if self._error:
@@ -126,9 +127,15 @@ class FakeKnowledgeClient:
             raise self._error
         return self._addable_result
 
-    def add_note(self, knowledge_base_id: str, doc_id: str, *, title: str, folder_id: str | None = None):
+    def add_note(self, knowledge_base_id: str, note_id: str, *, title: str, folder_id: str | None = None):
         if self._error:
             raise self._error
+        self.last_add_note_call = {
+            "knowledge_base_id": knowledge_base_id,
+            "note_id": note_id,
+            "title": title,
+            "folder_id": folder_id,
+        }
         return self._add_note_result
 
     def import_urls(self, knowledge_base_id: str, urls: list[str], *, folder_id: str | None = None):
@@ -246,7 +253,7 @@ class CliTests(unittest.TestCase):
         fake_result = {
             "docs": [
                 SearchResult(
-                    doc_id="doc-123",
+                    note_id="note-123",
                     title="会议纪要",
                     summary="本周项目进展",
                     folder_id="folder-1",
@@ -272,7 +279,7 @@ class CliTests(unittest.TestCase):
         output = stdout.getvalue()
         self.assertEqual(code, 0)
         self.assertIn("Search query: 会议", output)
-        self.assertIn("doc-123", output)
+        self.assertIn("note_id: note-123", output)
         self.assertIn("会议纪要", output)
         self.assertEqual(stderr.getvalue(), "")
 
@@ -280,7 +287,7 @@ class CliTests(unittest.TestCase):
         fake_result = {
             "docs": [
                 SearchResult(
-                    doc_id="doc-123",
+                    note_id="note-123",
                     title="会议纪要",
                     summary="摘要",
                     folder_id="folder-1",
@@ -306,17 +313,20 @@ class CliTests(unittest.TestCase):
         parsed = json.loads(stdout.getvalue())
         self.assertEqual(code, 0)
         self.assertEqual(parsed["query"], "会议")
-        self.assertEqual(parsed["docs"][0]["doc_id"], "doc-123")
+        self.assertEqual(parsed["docs"][0]["note_id"], "note-123")
+        self.assertEqual(parsed["docs"][0]["doc_id"], "note-123")
         self.assertEqual(fake_client.last_search_call["search_type"], 0)
         self.assertEqual(fake_client.last_search_call["sort_type"], 0)
 
     def test_note_search_supports_content_search_type_and_sort(self) -> None:
         fake_client = FakeNotesClient()
+        stdout = io.StringIO()
 
         with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
             with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
                 with patch("ima_note_cli.cli.NotesApiClient", return_value=fake_client):
-                    code = run(["note", "search", "项目排期", "--search-type", "content", "--sort", "title", "--start", "5"])
+                    with redirect_stdout(stdout):
+                        code = run(["note", "search", "项目排期", "--search-type", "content", "--sort", "title", "--start", "5"])
 
         self.assertEqual(code, 0)
         self.assertEqual(fake_client.last_search_call["search_type"], 1)
@@ -358,7 +368,7 @@ class CliTests(unittest.TestCase):
         notes_result = {
             "notes": [
                 SearchResult(
-                    doc_id="doc-200",
+                    note_id="note-200",
                     title="周报",
                     summary="本周完成事项",
                     folder_id="folder-1",
@@ -384,23 +394,27 @@ class CliTests(unittest.TestCase):
 
         parsed = json.loads(stdout.getvalue())
         self.assertEqual(code, 0)
-        self.assertEqual(parsed["notes"][0]["doc_id"], "doc-200")
+        self.assertEqual(parsed["notes"][0]["note_id"], "note-200")
+        self.assertEqual(parsed["notes"][0]["doc_id"], "note-200")
         self.assertEqual(fake_client.last_list_notes_call["folder_id"], "folder-1")
 
     def test_note_create_with_title_wraps_markdown(self) -> None:
-        fake_client = FakeNotesClient(create_result={"doc_id": "doc-new", "folder_id": "folder-1"})
+        fake_client = FakeNotesClient(create_result={"note_id": "note-new", "doc_id": "note-new", "folder_id": "folder-1"})
+        stdout = io.StringIO()
 
         with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
             with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
                 with patch("ima_note_cli.cli.NotesApiClient", return_value=fake_client):
-                    code = run(["note", "create", "--title", "测试标题", "--content", "正文内容", "--folder-id", "folder-1"])
+                    with redirect_stdout(stdout):
+                        code = run(["note", "create", "--title", "测试标题", "--content", "正文内容", "--folder-id", "folder-1"])
 
         self.assertEqual(code, 0)
         self.assertEqual(fake_client.last_create_call["folder_id"], "folder-1")
         self.assertEqual(fake_client.last_create_call["content"], "# 测试标题\n\n正文内容")
 
     def test_note_create_can_read_markdown_from_file(self) -> None:
-        fake_client = FakeNotesClient(create_result={"doc_id": "doc-new", "folder_id": ""})
+        fake_client = FakeNotesClient(create_result={"note_id": "note-new", "doc_id": "note-new", "folder_id": ""})
+        stdout = io.StringIO()
         with TemporaryDirectory() as tmp_dir:
             note_path = Path(tmp_dir) / "note.md"
             note_path.write_text("# 文件标题\n\n文件正文", encoding="utf-8")
@@ -408,22 +422,73 @@ class CliTests(unittest.TestCase):
             with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
                 with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
                     with patch("ima_note_cli.cli.NotesApiClient", return_value=fake_client):
-                        code = run(["note", "create", "--file", str(note_path), "--json"])
+                        with redirect_stdout(stdout):
+                            code = run(["note", "create", "--file", str(note_path), "--json"])
 
         self.assertEqual(code, 0)
         self.assertEqual(fake_client.last_create_call["content"], "# 文件标题\n\n文件正文")
 
     def test_note_append_with_content(self) -> None:
-        fake_client = FakeNotesClient(append_result={"doc_id": "doc-9"})
+        fake_client = FakeNotesClient(append_result={"note_id": "note-9", "doc_id": "note-9"})
+        stdout = io.StringIO()
 
         with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
             with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
                 with patch("ima_note_cli.cli.NotesApiClient", return_value=fake_client):
-                    code = run(["note", "append", "doc-9", "--content", "\n## 补充\n\n追加内容"])
+                    with redirect_stdout(stdout):
+                        code = run(["note", "append", "note-9", "--content", "\n## 补充\n\n追加内容"])
 
         self.assertEqual(code, 0)
-        self.assertEqual(fake_client.last_append_call["doc_id"], "doc-9")
+        self.assertEqual(fake_client.last_append_call["note_id"], "note-9")
         self.assertIn("追加内容", fake_client.last_append_call["content"])
+
+    def test_note_create_json_reports_removed_local_images_without_stderr(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        fake_client = FakeNotesClient()
+        with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
+            with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
+                with patch("ima_note_cli.cli.NotesApiClient", return_value=fake_client):
+                    with redirect_stdout(stdout), redirect_stderr(stderr):
+                        code = run(["note", "create", "--content", "正文\n![x](./local.png)", "--json"])
+
+        parsed = json.loads(stdout.getvalue())
+        self.assertEqual(code, 0)
+        self.assertEqual(parsed["removed_local_images"], ["./local.png"])
+        self.assertTrue(parsed["warnings"])
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertNotIn("local.png", fake_client.last_create_call["content"])
+
+    def test_note_append_human_mode_reports_removed_images_on_stderr(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        fake_client = FakeNotesClient(append_result={"note_id": "note-1", "doc_id": "note-1"})
+        with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
+            with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
+                with patch("ima_note_cli.cli.NotesApiClient", return_value=fake_client):
+                    with redirect_stdout(stdout), redirect_stderr(stderr):
+                        code = run(["note", "append", "note-1", "--content", "正文\n![x](C:\\x.png)"])
+
+        self.assertEqual(code, 0)
+        self.assertIn("Appended to note: note-1", stdout.getvalue())
+        self.assertIn("C:\\x.png", stderr.getvalue())
+
+    def test_note_create_rejects_non_utf8_file_before_api_call(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        fake_client = FakeNotesClient()
+        with TemporaryDirectory() as tmp_dir:
+            note_path = Path(tmp_dir) / "invalid.md"
+            note_path.write_bytes(b"\xff\xfe")
+            with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
+                with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
+                    with patch("ima_note_cli.cli.NotesApiClient", return_value=fake_client):
+                        with redirect_stdout(stdout), redirect_stderr(stderr):
+                            code = run(["note", "create", "--file", str(note_path)])
+
+        self.assertEqual(code, 1)
+        self.assertIn("valid UTF-8", stderr.getvalue())
+        self.assertIsNone(fake_client.last_create_call)
 
     def test_note_get_prints_content(self) -> None:
         stdout = io.StringIO()
@@ -432,13 +497,13 @@ class CliTests(unittest.TestCase):
             with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
                 with patch(
                     "ima_note_cli.cli.NotesApiClient",
-                    return_value=FakeNotesClient(get_result={"doc_id": "doc-1", "content": "正文内容"}),
+                    return_value=FakeNotesClient(get_result={"note_id": "note-1", "doc_id": "note-1", "content": "正文内容"}),
                 ):
                     with redirect_stdout(stdout):
-                        code = run(["note", "get", "doc-1"])
+                        code = run(["note", "get", "note-1"])
 
         self.assertEqual(code, 0)
-        self.assertIn("Doc ID: doc-1", stdout.getvalue())
+        self.assertIn("note_id: note-1", stdout.getvalue())
         self.assertIn("正文内容", stdout.getvalue())
 
     def test_kb_search_base_json_output(self) -> None:
@@ -517,6 +582,25 @@ class CliTests(unittest.TestCase):
 
         self.assertEqual(code, 0)
         self.assertEqual(fake_client.last_import_urls_call["urls"], ["https://example.com/article"])
+
+    def test_kb_add_note_supports_note_id_and_deprecated_doc_id(self) -> None:
+        for flag, deprecated in (("--note-id", False), ("--doc-id", True)):
+            with self.subTest(flag=flag):
+                stdout = io.StringIO()
+                stderr = io.StringIO()
+                fake_client = FakeKnowledgeClient()
+                with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
+                    with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
+                        with patch("ima_note_cli.cli.KnowledgeBaseApiClient", return_value=fake_client):
+                            with redirect_stdout(stdout), redirect_stderr(stderr):
+                                code = run(["kb", "add-note", "--kb-id", "kb-1", flag, "note-1", "--json"])
+
+                parsed = json.loads(stdout.getvalue())
+                self.assertEqual(code, 0)
+                self.assertEqual(fake_client.last_add_note_call["note_id"], "note-1")
+                self.assertEqual(parsed["note_id"], parsed["doc_id"])
+                self.assertEqual(bool(parsed["warnings"]), deprecated)
+                self.assertEqual(stderr.getvalue(), "")
 
     def test_api_errors_return_non_zero_exit_code(self) -> None:
         stdout = io.StringIO()

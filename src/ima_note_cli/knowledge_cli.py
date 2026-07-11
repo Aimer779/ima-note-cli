@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from urllib.parse import urlparse
 
 from .knowledge_api import KnowledgeBaseApiClient, KnowledgeBaseResult, KnowledgeBaseSummary, KnowledgeEntry
@@ -44,8 +45,14 @@ def add_kb_subcommands(subparsers: argparse._SubParsersAction[argparse.ArgumentP
 
     add_note_parser = subparsers.add_parser("add-note", help="Add an existing note to a knowledge base.")
     add_note_parser.add_argument("--kb-id", required=True, help="Knowledge base ID.")
-    add_note_parser.add_argument("--doc-id", required=True, help="Note document ID.")
-    add_note_parser.add_argument("--title", help="Title to show inside the knowledge base. Defaults to the doc ID.")
+    note_id_group = add_note_parser.add_mutually_exclusive_group(required=True)
+    note_id_group.add_argument("--note-id", help="Note ID.")
+    note_id_group.add_argument(
+        "--doc-id",
+        dest="deprecated_doc_id",
+        help="Deprecated compatibility alias for --note-id.",
+    )
+    add_note_parser.add_argument("--title", help="Title to show inside the knowledge base. Defaults to the note ID.")
     add_note_parser.add_argument("--folder-id", help="Optional folder ID inside the knowledge base.")
     add_note_parser.add_argument("--json", action="store_true", dest="as_json", help="Print structured JSON.")
     add_note_parser.set_defaults(kb_action="add-note")
@@ -78,7 +85,16 @@ def handle_kb_command(args: argparse.Namespace, client: KnowledgeBaseApiClient) 
     if args.kb_action == "addable":
         return handle_addable(client, args.limit, args.cursor, args.as_json)
     if args.kb_action == "add-note":
-        return handle_add_note(client, args.kb_id, args.doc_id, args.title, args.folder_id, args.as_json)
+        note_id = args.note_id or args.deprecated_doc_id
+        return handle_add_note(
+            client,
+            args.kb_id,
+            note_id,
+            args.title,
+            args.folder_id,
+            args.as_json,
+            used_deprecated_doc_id=args.deprecated_doc_id is not None,
+        )
     if args.kb_action == "add-url":
         return handle_add_url(client, args.kb_id, args.urls, args.folder_id, args.as_json)
     if args.kb_action == "add-file":
@@ -232,23 +248,31 @@ def handle_addable(client: KnowledgeBaseApiClient, limit: int, cursor: str, as_j
 def handle_add_note(
     client: KnowledgeBaseApiClient,
     knowledge_base_id: str,
-    doc_id: str,
+    note_id: str,
     title: str | None,
     folder_id: str | None,
     as_json: bool,
+    *,
+    used_deprecated_doc_id: bool = False,
 ) -> int:
     result = client.add_note(
         knowledge_base_id,
-        doc_id,
-        title=title.strip() if title and title.strip() else doc_id,
+        note_id,
+        title=title.strip() if title and title.strip() else note_id,
         folder_id=folder_id,
     )
     if as_json:
-        print(json.dumps(result, ensure_ascii=False, indent=2))
+        output = dict(result)
+        output["warnings"] = (
+            ["--doc-id is deprecated; use --note-id instead."] if used_deprecated_doc_id else []
+        )
+        print(json.dumps(output, ensure_ascii=False, indent=2))
         return 0
+    if used_deprecated_doc_id:
+        print("Warning: --doc-id is deprecated; use --note-id instead.", file=sys.stderr)
     print(f"Added note to knowledge base: {result['media_id'] or '(pending media id)'}")
     print(f"kb_id: {result['knowledge_base_id']}")
-    print(f"doc_id: {result['doc_id']}")
+    print(f"note_id: {result['note_id']}")
     if result["folder_id"]:
         print(f"folder_id: {result['folder_id']}")
     return 0

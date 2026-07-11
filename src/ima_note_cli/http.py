@@ -7,10 +7,7 @@ from urllib import error, request
 from .config import Credentials
 
 
-SUCCESS_CODE_VALUES = {0, "0", None}
-CODE_KEYS = ("code", "retcode", "errcode", "error_code")
 MESSAGE_KEYS = ("message", "msg", "errmsg", "error_message", "error_msg")
-DATA_KEYS = ("data", "result")
 
 
 class ApiError(RuntimeError):
@@ -39,7 +36,7 @@ class ImaApiClient:
 
         try:
             with request.urlopen(req, timeout=self._timeout) as response:
-                raw_text = response.read().decode("utf-8")
+                raw_body = response.read()
         except error.HTTPError as exc:
             detail = self._read_error_body(exc)
             raise ApiError(f"HTTP {exc.code} from IMA API: {detail}") from exc
@@ -48,6 +45,11 @@ class ImaApiClient:
             raise ApiError(f"Unable to reach the IMA API: {reason}") from exc
         except TimeoutError as exc:
             raise ApiError("The request to the IMA API timed out.") from exc
+
+        try:
+            raw_text = raw_body.decode("utf-8")
+        except UnicodeDecodeError as exc:
+            raise ApiError(f"IMA API endpoint {endpoint} returned a response that is not valid UTF-8.") from exc
 
         try:
             parsed = json.loads(raw_text)
@@ -60,14 +62,19 @@ class ImaApiClient:
         return self._unwrap_payload(parsed)
 
     def _unwrap_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
-        code = self._first_value(payload, CODE_KEYS)
-        if code not in SUCCESS_CODE_VALUES:
+        if "code" not in payload:
+            raise ApiError("IMA API response is missing the required code field.")
+        code = payload["code"]
+        is_success = not isinstance(code, bool) and (
+            (isinstance(code, int) and code == 0) or code == "0"
+        )
+        if not is_success:
             message = self._first_value(payload, MESSAGE_KEYS) or "unknown API error"
             raise ApiError(f"IMA API error {code}: {message}")
 
-        data = self._first_value(payload, DATA_KEYS)
-        if data is None:
-            return payload
+        if "data" not in payload:
+            raise ApiError("IMA API response is missing the required data field.")
+        data = payload["data"]
         if not isinstance(data, dict):
             raise ApiError("IMA API returned a non-object data payload.")
         return data

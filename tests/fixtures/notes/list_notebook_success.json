@@ -1,0 +1,13 @@
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "note_folder_infos": [
+      {"folder_id": "folder_test_001", "name": "测试笔记本", "note_number": 2, "create_time": 1700000000000, "modify_time": 1700000100000, "folder_type": 0, "parent_folder_id": ""}
+    ],
+    "next_cursor": "cursor_test_002",
+    "is_end": false,
+    "next_version": "version_test_002",
+    "need_update": true
+  }
+}

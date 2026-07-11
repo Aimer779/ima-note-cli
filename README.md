@@ -13,7 +13,7 @@
   - 按标题或正文搜索笔记
   - 列出笔记本
   - 列出指定笔记本下的笔记
-  - 按 `doc_id` 读取笔记纯文本内容
+  - 按 `note_id` 读取笔记纯文本内容
   - 从 Markdown 新建笔记
   - 向已有笔记追加 Markdown 内容
 - 管理知识库：
@@ -293,7 +293,7 @@ ima note list --folder-id "user_list_xxx" --json
 读取指定笔记正文：
 
 ```bash
-ima note get "your_doc_id"
+ima note get "your_note_id"
 ```
 
 新建笔记：
@@ -306,9 +306,11 @@ ima note create --file "./note.md" --folder-id "folder_id"
 追加内容到已有笔记：
 
 ```bash
-ima note append "your_doc_id" --content "\n## 补充内容\n\n追加文本"
-ima note append "your_doc_id" --file "./append.md"
+ima note append "your_note_id" --content "\n## 补充内容\n\n追加文本"
+ima note append "your_note_id" --file "./append.md"
 ```
+
+创建和追加会在请求前验证 UTF-8，并移除 Markdown 或 HTML 中的本地图片、data URI 和其他非 HTTP(S) 图片引用；网络图片保留。人类输出会把被移除的路径写到 stderr，`--json` 会在 `warnings` 和 `removed_local_images` 中报告。
 
 知识库命令：
 
@@ -318,10 +320,12 @@ ima kb show-base --kb-id "kb_xxx"
 ima kb browse --kb-id "kb_xxx"
 ima kb search "排期" --kb-id "kb_xxx"
 ima kb addable
-ima kb add-note --kb-id "kb_xxx" --doc-id "doc_xxx" --title "会议纪要"
+ima kb add-note --kb-id "kb_xxx" --note-id "note_xxx" --title "会议纪要"
 ima kb add-url --kb-id "kb_xxx" --url "https://example.com/article"
 ima kb add-file --kb-id "kb_xxx" --file "./report.pdf"
 ```
+
+`--note-id` 是正式参数。`ima kb add-note --doc-id ...` 暂时保留一个兼容周期并会给出弃用提示。Notes 与 add-note 的成功 JSON 以 `note_id` 为正式字段，同时保留值相同的 `doc_id` 兼容字段。
 
 如果你是在本地开发，也可以直接运行模块入口：
 
@@ -361,6 +365,7 @@ ima-note-cli/
 │       ├── http.py             # 共享 HTTP 请求与错误处理
 │       ├── notes_api.py        # IMA 笔记 API 客户端与数据模型
 │       ├── notes_cli.py        # `ima note ...` 命令实现
+│       ├── notes_content.py    # Notes UTF-8 校验与本地图片过滤
 │       ├── knowledge_api.py    # IMA 知识库 API 客户端与数据模型
 │       ├── knowledge_cli.py    # `ima kb ...` 命令实现
 │       └── knowledge_upload.py # 文件预检、COS 签名和上传流程
@@ -368,6 +373,11 @@ ima-note-cli/
 │   ├── _bootstrap.py           # 为 src 布局测试注入导入路径
 │   ├── test_cli.py             # CLI 命令行为与输出回归测试
 │   ├── test_config.py          # 配置加载、优先级和缺失场景测试
+│   ├── test_http.py            # HTTP wire envelope 契约测试
+│   ├── test_notes_api.py       # Notes 1.1.7 endpoint 与解析测试
+│   ├── test_notes_content.py   # Markdown 写入安全测试
+│   ├── test_knowledge_api.py   # KB add-note note_id 契约测试
+│   ├── fixtures/notes/         # 脱敏 Notes 1.1.7 wire fixtures
 │   └── test_knowledge_upload.py# 知识库上传预检与签名测试
 ├── .env                        # 本地开发凭证文件
 ├── .env.example                # `.env` 模板文件
