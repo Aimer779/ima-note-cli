@@ -1,194 +1,91 @@
 ---
 name: ima-note-cli
-description: Install, verify, configure credentials for, and use the `ima` command-line tool for IMA notes and knowledge bases. Use when Agent needs to help a user set up the CLI with `uv tool` or a local checkout, troubleshoot command availability, validate credentials with `ima auth`, or run note and knowledge-base commands such as `ima note search`, `ima note create`, `ima kb browse`, `ima kb add-url`, and `ima kb add-file`. The legacy `ima-note` entry point remains available for note-only compatibility.
+description: Install, verify, configure, and troubleshoot the `ima` Python CLI; use it to search, read, create, and append IMA Notes, browse and search Knowledge bases, inspect or export original media, import public URLs, and upload local or remote files. Use when a user needs CLI setup, credential guidance, JSON automation, pagination, safe writes/uploads, or compatibility help for the legacy `ima-note` executable and deprecated `--doc-id` alias.
 ---
 
-# Ima Note Cli
+# Use the IMA CLI
 
-## Overview
+## Start quickly
 
-Use this skill to guide users through installing `ima`, validating that the command works, configuring credentials, and running the supported note and knowledge-base workflows.
+1. Install the CLI with `uv tool install git+https://github.com/Aimer779/ima-note-cli`.
+2. Verify it with `ima --help`.
+3. Configure credentials without printing their values.
+4. Check configuration with `ima auth` or `ima auth --json`.
+5. Inspect exact current arguments with `ima <group> <command> --help` before a consequential write.
 
-Prefer `uv tool install` for end users who want a globally available `ima` command. Prefer a local editable install for development, testing, and code changes.
+Use `uv run python -m ima_note_cli ...` instead of `ima ...` when working from an uninstalled source checkout.
 
-Command layout:
+## Keep CLI and skill installation separate
 
-- Top level:
-  - `ima auth`
-- Notes:
-  - `ima note search`
-  - `ima note folders`
-  - `ima note list`
-  - `ima note get`
-  - `ima note create`
-  - `ima note append`
-- Knowledge base:
-  - `ima kb search-base`
-  - `ima kb show-base`
-  - `ima kb browse`
-  - `ima kb search`
-  - `ima kb addable`
-  - `ima kb add-note`
-  - `ima kb add-url`
-  - `ima kb add-file`
-  - `ima kb media-info`
-  - `ima kb read`
-  - `ima kb export`
+Treat `uv tool install` as installation of the Python CLI only. It does not install this agent skill. Use or link `skills/ima-note-cli` separately from a repository checkout. Do not claim that this skill is bundled in the wheel.
 
-Compatibility:
+## Configure credentials safely
 
-- `ima-note` still exists as a legacy note-only entry point
-- `note_id` is the canonical identifier; JSON temporarily includes an equal deprecated `doc_id` field
-- `ima kb add-note --doc-id` remains a deprecated alias for `--note-id` during the compatibility period
-- Prefer documenting and recommending `ima ...` going forward
+Require `IMA_OPENAPI_CLIENTID` and `IMA_OPENAPI_APIKEY`. Resolve each field independently in this order:
 
-## Quick Start
+1. Process environment.
+2. `.env` in the current working directory.
+3. `~/.config/ima/client_id` or `~/.config/ima/api_key`.
 
-Choose one install path:
+Prefer environment variables for a globally installed CLI. Never request, echo, log, or embed real credential values in commands. Use `setx` only when persistent Windows configuration is requested, and remind the user to open a new terminal. Use `ima auth` as the first credential diagnostic.
 
-- Global tool install:
-  - `uv tool install git+https://github.com/Aimer779/ima-note-cli`
-  - Verify with `ima --help`
-- Local development:
-  - `git clone https://github.com/Aimer779/ima-note-cli`
-  - `cd ima-note-cli`
-  - `uv venv`
-  - `uv pip install -e .`
-  - Verify with `uv run python -m ima_note_cli --help`
+## Read Notes
 
-## Credential Setup
+Use all six Note commands:
 
-Require these values:
+- `ima note search QUERY` to search titles or content.
+- `ima note folders` to list notebooks.
+- `ima note list` to list notes, optionally under a folder.
+- `ima note get NOTE_ID` to read one note.
+- `ima note create --title TITLE --content TEXT` to create one note.
+- `ima note append NOTE_ID --content TEXT` to append to one note.
 
-```bash
-IMA_OPENAPI_CLIENTID=your_client_id
-IMA_OPENAPI_APIKEY=your_api_key
-```
+Use `note_id` as the canonical identifier. Confirm the intended target before create or append. Prefer `--file` for substantial Markdown input; the CLI validates UTF-8 and removes unsafe local, data, and non-HTTP(S) image references before writes.
 
-Use this precedence rule per field:
+## Work with Knowledge bases
 
-1. Process environment variables
-2. Current working directory `.env`
-3. `~/.config/ima/client_id` and `~/.config/ima/api_key`
+Use all eleven Knowledge commands:
 
-When the CLI is installed via `uv tool`, prefer system environment variables because users will run `ima` from arbitrary directories.
+- `ima kb search-base QUERY`
+- `ima kb show-base --kb-id KB_ID`
+- `ima kb browse --kb-id KB_ID`
+- `ima kb search QUERY --kb-id KB_ID`
+- `ima kb addable`
+- `ima kb add-note --kb-id KB_ID --note-id NOTE_ID --title TITLE`
+- `ima kb add-url --kb-id KB_ID --url URL`
+- `ima kb add-file --kb-id KB_ID --file PATH`
+- `ima kb media-info --media-id MEDIA_ID`
+- `ima kb read --media-id MEDIA_ID`
+- `ima kb export --media-id MEDIA_ID --output PATH`
 
-Use these OS-specific commands when the user asks how to configure credentials:
+Confirm the knowledge base and content before any add/import/upload operation. Repeat `--file` for a multi-file upload. Use `--on-conflict error` by default and use `--on-conflict rename` only when automatic renaming is acceptable. Set `--download-timeout` and `--upload-timeout` when network conditions require explicit bounds.
 
-- Windows PowerShell, current session:
-  - `$env:IMA_OPENAPI_CLIENTID="your_client_id"`
-  - `$env:IMA_OPENAPI_APIKEY="your_api_key"`
-- Windows PowerShell, persistent:
-  - `setx IMA_OPENAPI_CLIENTID "your_client_id"`
-  - `setx IMA_OPENAPI_APIKEY "your_api_key"`
-- Windows CMD, current session:
-  - `set IMA_OPENAPI_CLIENTID=your_client_id`
-  - `set IMA_OPENAPI_APIKEY=your_api_key`
-- Windows CMD, persistent:
-  - `setx IMA_OPENAPI_CLIENTID "your_client_id"`
-  - `setx IMA_OPENAPI_APIKEY "your_api_key"`
-- macOS/Linux bash or zsh, current session:
-  - `export IMA_OPENAPI_CLIENTID="your_client_id"`
-  - `export IMA_OPENAPI_APIKEY="your_api_key"`
-- fish, current session:
-  - `set -x IMA_OPENAPI_CLIENTID "your_client_id"`
-  - `set -x IMA_OPENAPI_APIKEY "your_api_key"`
+## Preserve URL and upload safety
 
-Tell users who ran `setx` to open a new terminal before retrying the CLI.
+Let `ima kb add-url` classify supported public web pages and remote files. Do not bypass its SSRF, redirect, DNS, scheme, port, or size checks. Unsupported video hosts fail before network access. Remote supported files are downloaded with bounded streaming and uploaded through the same guarded workflow as local files.
 
-## Verification Workflow
+Do not recommend direct raw API calls, archived Node/CJS scripts, arbitrary service base URLs, or self-updating skill code. Send long-lived IMA credentials only through the CLI's official-host client. Treat signed COS URLs and temporary headers as secrets.
 
-Run these checks in order:
+Use `media-info` for redacted metadata. Use `read` only for bounded textual original content. Use `export` for binary content; it refuses overwrite unless `--force` is explicit and writes atomically.
 
-1. Command availability:
-   - Global install: `ima --help`
-   - Local checkout: `uv run python -m ima_note_cli --help`
-2. Credential presence:
-   - `ima auth`
-   - Or `ima auth --json`
-3. Optional local test suite for development:
-   - `uv run python -m unittest discover -s tests -v`
+## Paginate and automate
 
-Interpret the results this way:
+Add `--json` for machine-readable output. Expect one JSON document containing `schema_version`, `ok`, `status`, `command`, `warnings`, and command data or a stable error. Keep stderr empty for JSON failures.
 
-- If `ima --help` fails, treat it as an install or `PATH` problem.
-- If `ima auth` reports missing credentials, fix configuration before debugging API behavior.
-- If the tests fail in a local checkout, keep the user on the local workflow instead of asking them to reinstall globally.
+Use `--all --max-pages N` for bounded multi-page list/search operations. A page cap or mixed batch can produce itemized partial output. Interpret exit code 9 as partial or itemized batch failure and inspect `results`, `summary`, and each `stage`.
 
-## Common Commands
+Recognize the remaining exit codes: 0 success, 2 input, 3 configuration, 4 network, 5 IMA business, 6 protocol, 7 local/original-content I/O, 8 upload, 70 internal, and 130 interruption.
 
-Use these commands for normal operation:
+## Maintain legacy compatibility
 
-- Check credentials:
-  - `ima auth`
-- Search notes by title:
-  - `ima note search "meeting notes"`
-- Search note content:
-  - `ima note search "project schedule" --search-type content`
-- List folders:
-  - `ima note folders`
-- List notes under a folder:
-  - `ima note list --folder-id "user_list_xxx"`
-- Read note content:
-  - `ima note get "your_note_id"`
-- Create a note from inline Markdown:
-  - `ima note create --title "Test Title" --content "Body content"`
-- Create a note from a file:
-  - `ima note create --file "./note.md" --folder-id "folder_id"`
-- Append Markdown to a note:
-  - `ima note append "your_note_id" --content "\n## Update\n\nAppended text"`
-- Search knowledge bases:
-  - `ima kb search-base "product docs"`
-- Show a knowledge base:
-  - `ima kb show-base --kb-id "kb_xxx"`
-- Browse a knowledge base:
-  - `ima kb browse --kb-id "kb_xxx"`
-- Search within a knowledge base:
-  - `ima kb search "schedule" --kb-id "kb_xxx"`
-- List addable knowledge bases:
-  - `ima kb addable`
-- Add a note to a knowledge base:
-  - `ima kb add-note --kb-id "kb_xxx" --note-id "note_xxx" --title "Meeting Notes"`
-- Import a URL into a knowledge base:
-  - `ima kb add-url --kb-id "kb_xxx" --url "https://example.com/article"`
-- Upload a local file into a knowledge base:
-  - `ima kb add-file --kb-id "kb_xxx" --file "./report.pdf"`
-- Inspect safe original-media metadata:
-  - `ima kb media-info --media-id "media_xxx"`
-- Read note or textual URL media:
-  - `ima kb read --media-id "media_xxx"`
-- Export media without overwriting an existing file:
-  - `ima kb export --media-id "media_xxx" --output "./original.bin"`
-- Emit JSON for scripting:
-  - Add `--json` to `auth`, note subcommands, or kb subcommands that support machine-readable output
+Recommend `ima` as the formal entry point. Treat `ima-note` as a legacy note-only executable that remains available. Treat `--doc-id` and the equal JSON `doc_id` field only as deprecated compatibility for canonical `--note-id` and `note_id`; do not present them as current API fields.
 
-Before note create or append, the CLI validates UTF-8 and removes local/data/non-HTTP(S) image references. Human mode reports removed paths on stderr; JSON mode reports them in `warnings` and `removed_local_images` without contaminating stdout.
+## Troubleshoot in order
 
-JSON success and failure are single documents with `schema_version`, `ok`, `command`, and `warnings`; JSON failures keep stderr empty. Never print or request full signed media URLs, Authorization/Cookie values, IMA credentials, or COS temporary secrets. `kb read` accepts only bounded textual content; use `kb export` for binary media. Export defaults to no overwrite and `--force` still uses atomic replacement.
+1. Run `ima --help` to distinguish installation or PATH failures.
+2. Run `ima auth` without exposing values.
+3. Run a minimal read such as `ima note search "test"`.
+4. Use the command's `--help` output as the argument truth source.
+5. In a checkout, run `uv run python -m unittest discover -s tests -v` only when code diagnostics are needed.
 
-When the user is in a local checkout and prefers not to install globally, replace `ima ...` with `uv run python -m ima_note_cli ...`.
-
-Legacy note compatibility:
-
-- `ima-note auth`
-- `ima-note search "meeting notes"`
-- `ima-note create --title "Test Title" --content "Body content"`
-
-## Troubleshooting
-
-- If the command is not found after `uv tool install`, check the UV tool bin directory with `uv tool dir --bin` and make sure it is on `PATH`.
-- If credentials appear correct but API calls still fail, ask the user to run `ima auth` first, then a minimal read command such as `ima note search "test"`.
-- If the user wants `.env`, remind them that the CLI only reads `.env` from the current working directory.
-- If Windows terminals throw `'gbk' codec can't encode character ...`, explain that the terminal is using `GBK` while note output contains emoji or other non-GBK characters.
-- `ima auth` now checks `PYTHONUTF8` and `PYTHONIOENCODING` on Windows and prints a shell-specific hint when they are missing, so use that as the first diagnostic step.
-- For that encoding problem on Windows, suggest this order:
-  - Set PowerShell session variables: `$env:PYTHONUTF8="1"` and `$env:PYTHONIOENCODING="utf-8"`
-  - Or in CMD: `set PYTHONUTF8=1` and `set PYTHONIOENCODING=utf-8`
-  - Retry with a minimal command such as `ima note search "coding"`
-- If the user wants the UTF-8 behavior to persist on Windows, suggest `setx PYTHONUTF8 "1"` and `setx PYTHONIOENCODING "utf-8"`, then tell them to open a new terminal.
-# Batch C behavior
-
-- `ima kb add-url` classifies public web and supported file URLs. Never suggest bypassing the SSRF checks.
-- `ima kb add-file --file PATH` may repeat; conflict policy is `error` unless `--on-conflict rename` is explicit.
-- Use `--all --max-pages N` for bounded multi-page retrieval.
-- Exit code 9 means itemized partial/failed batch output is available; inspect `results` and `stage`.
+On Windows encoding failures, set `PYTHONUTF8=1` and `PYTHONIOENCODING=utf-8` for the relevant shell, then retry in a new terminal if persistent variables were set.

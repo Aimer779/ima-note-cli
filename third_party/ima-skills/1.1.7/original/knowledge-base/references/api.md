@@ -23,17 +23,18 @@
 
 ## 快速决策
 
-| 用户意图                        | 接口                                                                   |
-| ------------------------------- | ---------------------------------------------------------------------- |
-| 「上传文件到知识库」            | `check_repeated_names` → `create_media` → COS Upload → `add_knowledge` |
-| 「上传文件到指定文件夹」        | 先定位文件夹 → 同上（传入 `folder_id`）                                |
-| 「添加网页/微信文章到知识库」   | `import_urls`                                                          |
-| 「获取知识库信息」              | `get_knowledge_base`                                                   |
-| 「浏览知识库内容 / 浏览文件夹」 | `get_knowledge_list`（可传 `folder_id` 进入子文件夹）                  |
-| 「在知识库中搜索」              | `search_knowledge`                                                     |
-| 「搜索知识库列表」              | `search_knowledge_base`                                                |
-| 「获取可添加的知识库列表」      | `get_addable_knowledge_base_list`                                      |
-| 「检查文件名是否重复」          | `check_repeated_names`                                                 |
+| 用户意图                             | 接口                                                                   |
+| ------------------------------------ | ---------------------------------------------------------------------- |
+| 「上传文件到知识库」                 | `check_repeated_names` → `create_media` → COS Upload → `add_knowledge` |
+| 「上传文件到指定文件夹」             | 先定位文件夹 → 同上（传入 `folder_id`）                                |
+| 「添加网页/微信文章到知识库」        | `import_urls`                                                          |
+| 「获取知识库信息」                   | `get_knowledge_base`                                                   |
+| 「浏览知识库内容 / 浏览文件夹」      | `get_knowledge_list`（可传 `folder_id` 进入子文件夹）                  |
+| 「在知识库中搜索」                   | `search_knowledge`                                                     |
+| 「搜索知识库列表」                   | `search_knowledge_base`                                                |
+| 「获取可添加的知识库列表」           | `get_addable_knowledge_base_list`                                      |
+| 「检查文件名是否重复」               | `check_repeated_names`                                                 |
+| 「查看原文」「分析原文」「导出原文」 | `get_media_info`                                                       |
 
 ---
 
@@ -105,6 +106,19 @@
 | `url`      | string | 导入的 URL              |
 | `ret_code` | int32  | 0=成功，非 0=失败       |
 | `media_id` | string | 导入成功后返回的媒体 ID |
+
+### URLInfo（访问链接信息）
+
+| 字段      | 类型                  | 说明                                                      |
+| --------- | --------------------- | --------------------------------------------------------- |
+| `url`     | string                | 访问链接                                                  |
+| `headers` | map\<string, string\> | 访问链接所需 header，非空时需在请求 url 时同时传入 header |
+
+### NotebookExtInfo（笔记扩展信息）
+
+| 字段          | 类型   | 说明    |
+| ------------- | ------ | ------- |
+| `notebook_id` | string | 笔记 ID |
 
 ### FileInfo（文件信息）
 
@@ -286,7 +300,7 @@ POST /openapi/wiki/v1/search_knowledge_base
 | -------- | ------ | ---- | -------------------- |
 | `query`  | string | 是   | 搜索关键词           |
 | `cursor` | string | 是   | 游标，首次传空字符串 |
-| `limit`  | uint64 | 是   | 数量限制（1-50）     |
+| `limit`  | uint64 | 是   | 数量限制（1-20）     |
 
 #### 返回字段
 
@@ -379,6 +393,94 @@ POST /openapi/wiki/v1/import_urls
 
 ---
 
+### 10. 获取媒体信息
+
+POST /openapi/wiki/v1/get_media_info
+
+**触发场景**：用户想查看原文、分析原文、导出原文时，通过 `media_id` 获取媒体的访问信息。
+
+#### 请求参数
+
+| 字段       | 类型   | 必填 | 说明                |
+| ---------- | ------ | ---- | ------------------- |
+| `media_id` | string | 是   | 媒体 ID（不可为空） |
+
+#### 响应示例
+
+**成功 — URL 类型媒体：**
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "media_type": 1,
+    "url_info": {
+      "url": "https://example.com/file.pdf",
+      "headers": {
+        "Authorization": "Bearer xxx"
+      }
+    }
+  }
+}
+```
+
+**成功 — 笔记类型媒体（media_type=11）：**
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "media_type": 11,
+    "notebook_ext_info": {
+      "notebook_id": "abc123"
+    }
+  }
+}
+```
+
+**成功 — 不可访问（无 url_info）：**
+
+```json
+{
+  "code": 0,
+  "msg": "success",
+  "data": {
+    "media_type": 1
+  }
+}
+```
+
+**失败：**
+
+```json
+{
+  "code": 110001,
+  "msg": "参数非法",
+  "data": {}
+}
+```
+
+#### 返回字段（`data` 内）
+
+| 字段                | 类型            | 说明                                                                                              |
+| ------------------- | --------------- | ------------------------------------------------------------------------------------------------- |
+| `media_type`        | int32           | 媒体类型（见 MediaType 枚举）                                                                     |
+| `url_info`          | URLInfo         | 访问链接信息，非笔记类型时填写（见 [URLInfo](#urlinfo访问链接信息)）                              |
+| `notebook_ext_info` | NotebookExtInfo | 笔记扩展信息，`media_type=11`（笔记）时填写（见 [NotebookExtInfo](#notebookextinfo笔记扩展信息)） |
+
+#### 响应分支说明
+
+| 场景                                   | 响应特征                                                             | 处理方式                                                                     |
+| -------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| 媒体可通过 URL 访问                    | `code=0`，`data.url_info` 存在，`url` 非空                           | 使用 `url` 和 `headers`（如有）请求原文内容                                  |
+| 媒体是笔记类型                         | `code=0`，`data.media_type=11`，`notebook_ext_info.notebook_id` 存在 | 将 `notebook_id` 作为 `note_id` 调用 notes 模块的 `get_doc_content` 获取内容 |
+| 媒体不可访问（无 URL 或 URL 请求失败） | `code=0`，`data.url_info` 为空，或请求 `url` 返回非 200 状态         | 提示用户「请使用ima客户端查看原文」                                          |
+| API 调用失败                           | `code≠0`                                                             | 将 `msg` 展示给用户                                                          |
+
+---
+
 ## 文件夹说明
 
 知识库内容以文件夹层级结构组织。文件夹是一种特殊的知识条目：
@@ -387,6 +489,53 @@ POST /openapi/wiki/v1/import_urls
 - `search_knowledge` 搜索结果中也会包含匹配的文件夹
 - 所有支持 `folder_id` 参数的接口（`add_knowledge`、`import_urls`、`get_knowledge_list`、`check_repeated_names`），省略 `folder_id` 则操作根目录。**根目录的 folder_id 等于 knowledge_base_id**，当接口要求 `folder_id` 必填时（如 `import_urls`），传 `knowledge_base_id` 的值即可表示根目录
 - **定位文件夹**：当用户只提供文件夹名称时，使用 `search_knowledge` 按名称搜索，或用 `get_knowledge_list` 逐级浏览，从返回结果中找到目标文件夹的 ID
+
+---
+
+## Preflight Check
+
+使用 `scripts/preflight-check.cjs` 脚本自动完成类型检测和大小校验。脚本按以下优先级解析：
+
+1. **`--content-type` 已提供且可识别** → content-type 优先，直接使用
+2. **`--content-type` 不可识别** → 回退到扩展名
+3. **未提供 `--content-type`** → 使用扩展名
+4. **两者都无法识别** → 拒绝处理
+
+```bash
+# 有扩展名（自动推断）
+node .claude/skills/ima-skill/knowledge-base/scripts/preflight-check.cjs --file report.pdf
+
+# 无扩展名或扩展名不可识别（需传入 content-type）
+node .claude/skills/ima-skill/knowledge-base/scripts/preflight-check.cjs --file downloaded_file --content-type application/pdf
+```
+
+---
+
+## URL Type Detection
+
+添加 URL 到知识库时，需根据 URL 模式和 Content-Type 判断类型。
+
+**1. Content-Type 为 `text/html` 时，按 URL 模式区分：**
+
+| URL 模式                                            | media_type | 类型           | 处理方式                                                  |
+| --------------------------------------------------- | ---------- | -------------- | --------------------------------------------------------- |
+| 匹配 `mp.weixin.qq.com/s/` 或 `mp.weixin.qq.com/s?` | 6          | 微信公众号文章 | 使用 `import_urls`                                        |
+| 以 `https://www.bilibili.com/video/` 开头           | ❌ 16      | 视频网页       | **不支持**，告知用户「仅支持在 ima 桌面端内添加进知识库」 |
+| 以 `https://www.youtube.com/watch` 开头             | ❌ 16      | 视频网页       | **不支持**，告知用户「仅支持在 ima 桌面端内添加进知识库」 |
+| 以 `file://` 开头                                   | ❌         | 本地 HTML      | **不支持**，告知用户「仅支持在 ima 桌面端内添加进知识库」 |
+| 其他 `text/html` 页面                               | 2          | 普通网页       | 使用 `import_urls`                                        |
+
+**2. Content-Type 为文件类型时**：按 MediaType 枚举表处理。
+
+**3. 其他**：告知用户该类型不被支持。
+
+**已知文件型 URL 模式**：
+
+- `arxiv.org/pdf/*` → PDF
+- `*.pdf`、`*.docx`、`*.pptx`、`*.xlsx` 结尾 → 对应文件类型
+- GitHub raw 文件链接 → 按扩展名判断
+
+**文件名推断优先级**：Content-Disposition header → URL path → last URL segment + Content-Type extension
 
 ---
 
@@ -410,14 +559,14 @@ POST /openapi/wiki/v1/import_urls
 
 ```json
 {
-  "retcode": 0,
-  "errmsg": "成功",
+  "code": 0,
+  "msg": "成功",
   "data": { ... }
 }
 ```
 
-- `retcode=0`：成功，从 `data` 提取业务字段
-- `retcode≠0`：失败，**直接将 `errmsg` 展示给用户**，无需自行翻译错误码
+- `code=0`：成功，从 `data` 提取业务字段
+- `code≠0`：失败，**直接将 `msg` 展示给用户**，无需自行翻译错误码
 
 ---
 
@@ -432,15 +581,15 @@ POST /openapi/wiki/v1/import_urls
 
 ## 错误码
 
-| 错误码 | 说明         | 建议处理                    |
-| ------ | ------------ | --------------------------- |
-| 0      | 成功         | —                           |
-| 110001 | 参数非法     | 检查请求参数（详见 errmsg） |
-| 110002 | 配置非法     | 检查服务配置                |
-| 110010 | 下游网络错误 | 可重试                      |
-| 110011 | 下游逻辑错误 | 不可重试，详见 errmsg       |
-| 110012 | 接口无效     | 检查接口路径                |
-| 110013 | 客户端取消   | 检查请求是否超时            |
-| 110020 | 安全打击     | 检查内容是否违规            |
-| 110021 | 请求频控     | 降低请求频率后重试          |
-| 110030 | 无权限       | 确认操作权限                |
+| 错误码 | 说明         | 建议处理                 |
+| ------ | ------------ | ------------------------ |
+| 0      | 成功         | —                        |
+| 110001 | 参数非法     | 检查请求参数（详见 msg） |
+| 110002 | 配置非法     | 检查服务配置             |
+| 110010 | 下游网络错误 | 可重试                   |
+| 110011 | 下游逻辑错误 | 不可重试，详见 msg       |
+| 110012 | 接口无效     | 检查接口路径             |
+| 110013 | 客户端取消   | 检查请求是否超时         |
+| 110020 | 安全打击     | 检查内容是否违规         |
+| 110021 | 请求频控     | 降低请求频率后重试       |
+| 110030 | 无权限       | 确认操作权限             |

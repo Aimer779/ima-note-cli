@@ -1,5 +1,7 @@
 # 批次 A 详细实现计划：契约安全网与 Notes 迁移
 
+> 阶段 6 注：当时的 intake 路径 `ima-skills-1.1.7 (1)` 已按原始 bytes 归档为 `third_party/ima-skills/1.1.7/original`；下文旧路径只表示历史基线。当前唯一规范契约为 `docs/IMA_OPENAPI_CONTRACT_1_1_7.md`。
+
 > 编制日期：2026-07-11  
 > 对应总计划：OPTIMIZATION_PLAN.md 的阶段 0、阶段 1 和 Notes 文档最小同步  
 > 计划状态：已实施（2026-07-11，全量单元测试通过）  

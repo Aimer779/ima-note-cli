@@ -5,14 +5,14 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "ima-note-cli"
 version = "0.1.0"
-description = "CLI for searching and reading IMA notes via the IMA OpenAPI."
+description = "CLI for reading, writing, importing, and uploading IMA Notes and Knowledge content."
 readme = "README.md"
 requires-python = ">=3.10"
 authors = [
   { name = "Codex" }
 ]
 license = { text = "MIT" }
-keywords = ["cli", "ima", "notes"]
+keywords = ["cli", "ima", "notes", "knowledge-base", "openapi"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "Programming Language :: Python :: 3 :: Only",

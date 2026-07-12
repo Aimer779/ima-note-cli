@@ -7,6 +7,31 @@
  * Validates file type, size, and extracts all metadata needed for
  * create_media and add_knowledge API calls.
  *
+ * Scope: this script only covers FILE-UPLOADABLE media types. The full
+ * MediaType enum also includes non-file types that must be added through
+ * other channels (and will be rejected here):
+ *
+ *   media_type  name            how to add
+ *   ─────────   ──────────────  ─────────────────────────────────────────
+ *   0          Unknown          (reject — unsupported)
+ *   1          PDF              file upload                 ← this script
+ *   2          Web              add via URL (not a file)
+ *   3          Word             file upload                 ← this script
+ *   4          PPT              file upload                 ← this script
+ *   5          Excel            file upload                 ← this script
+ *   6          WeChatArticle    add via URL (not a file)
+ *   7          MarkDown         file upload                 ← this script
+ *   9          Image            file upload                 ← this script
+ *   11         Note             created inside IMA
+ *   12         AISession        created inside IMA
+ *   13         TXT              file upload                 ← this script
+ *   14         Xmind            file upload                 ← this script
+ *   15         SoundRecording   file upload                 ← this script
+ *   16         WebVideo         add via URL (not a file; Bilibili/YouTube unsupported)
+ *   19         Podcast          add via URL (not a file)
+ *   98         Code             created inside IMA
+ *   99         Folder           organizational only
+ *
  * Resolution priority:
  *   1. If --content-type is provided and recognized → use it (content-type rules over extension)
  *   2. If --content-type is unrecognized, fall back to extension
@@ -128,6 +153,23 @@ const UNSUPPORTED_VIDEO_CT = new Set([
   'video/webm',
 ]);
 
+// Types that exist in the MediaType enum but are NOT file-uploadable —
+// reject with a hint pointing to the correct channel.
+// Maps extension → { media_type, hint }
+const NON_FILE_EXT = {
+  html: { media_type: 2, hint: 'Web pages must be added via URL (add_url_knowledge), not as a file upload.' },
+  htm: { media_type: 2, hint: 'Web pages must be added via URL (add_url_knowledge), not as a file upload.' },
+  mhtml: { media_type: 2, hint: 'Web pages must be added via URL (add_url_knowledge), not as a file upload.' },
+};
+
+const NON_FILE_CT = {
+  'text/html': { media_type: 2, hint: 'Web pages must be added via URL (add_url_knowledge), not as a file upload.' },
+  'application/xhtml+xml': {
+    media_type: 2,
+    hint: 'Web pages must be added via URL (add_url_knowledge), not as a file upload.',
+  },
+};
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 function fail(result) {
@@ -183,11 +225,30 @@ try {
 }
 
 // 2. Check not an unsupported video type (by ext or content-type)
+//    Videos map to MediaType.WebVideo (16) but that is URL-only — not file-uploadable.
+//    Bilibili / YouTube URLs are also unsupported in this skill; use IMA desktop app.
 if (UNSUPPORTED_VIDEO_EXT.has(ext)) {
-  fail({ ...base, reason: `Video files (.${ext}) are not supported. Only supported in IMA desktop app.` });
+  fail({
+    ...base,
+    reason: `Video files (.${ext}) are not supported as uploads. Videos must be added via URL (MediaType.WebVideo), and Bilibili/YouTube are unsupported — use the IMA desktop app.`,
+  });
 }
 if (UNSUPPORTED_VIDEO_CT.has(inputContentType)) {
-  fail({ ...base, reason: `Video files (${inputContentType}) are not supported. Only supported in IMA desktop app.` });
+  fail({
+    ...base,
+    reason: `Video content (${inputContentType}) is not supported as upload. Videos must be added via URL (MediaType.WebVideo), and Bilibili/YouTube are unsupported — use the IMA desktop app.`,
+  });
+}
+
+// 2b. Reject media types that exist in the enum but are not file-uploadable
+//     (Web, WeChatArticle, Podcast, etc.) with guidance on the correct channel.
+const nonFileByExt = ext ? NON_FILE_EXT[ext] : undefined;
+if (nonFileByExt) {
+  fail({ ...base, reason: nonFileByExt.hint });
+}
+const nonFileByCt = inputContentType ? NON_FILE_CT[inputContentType] : undefined;
+if (nonFileByCt) {
+  fail({ ...base, reason: nonFileByCt.hint });
 }
 
 // 3. Resolve media_type and content_type

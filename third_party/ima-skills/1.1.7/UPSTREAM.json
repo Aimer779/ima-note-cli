@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "name": "ima-skills",
+  "version": "1.1.7",
+  "slug": "ima-skills",
+  "publisher": {
+    "name": "iampennyli",
+    "owner_id": "kn7fpa7e88ngzptwrczstadp5h831pc9"
+  },
+  "source_url": "https://clawhub.ai/iampennyli/ima-skills",
+  "published_at_ms": 1777025159209,
+  "recorded_at": "2026-07-12",
+  "license": "MIT-0",
+  "license_evidence": "original/skill-card.md",
+  "manifest": "SHA256SUMS",
+  "aggregate_manifest_sha256": "1f558e8d78b2153cfc2cd7415c7c8cd348393d3ed0664d47c178f0458c6c3927",
+  "role": "reference-only",
+  "active_skill": false,
+  "included_in_wheel": false
+}

@@ -22,6 +22,11 @@ function parseArgs(argv) {
 
 const REQUIRED = ['file', 'secret-id', 'secret-key', 'token', 'bucket', 'region', 'cos-key'];
 
+// Default socket timeout: 5 minutes. Override with --timeout <ms>.
+// This prevents the Bash tool's hard 120s timeout from silently killing a
+// large-file upload mid-stream and leaving a partial COS object.
+const DEFAULT_TIMEOUT_MS = 300_000;
+
 // --- Crypto helpers ---
 function hmacSha1(key, data) {
   return crypto.createHmac('sha1', key).update(data).digest('hex');
@@ -76,6 +81,7 @@ function upload(args) {
 
   const startTime = args['start-time'] || String(Math.floor(Date.now() / 1000));
   const expiredTime = args['expired-time'] || String(Math.floor(Date.now() / 1000) + 3600);
+  const timeoutMs = parseInt(args.timeout || String(DEFAULT_TIMEOUT_MS), 10);
 
   const fileContent = fs.readFileSync(filePath);
   const hostname = `${bucket}.cos.${region}.myqcloud.com`;
@@ -111,6 +117,7 @@ function upload(args) {
       Authorization: authorization,
       'x-cos-security-token': token,
     },
+    timeout: timeoutMs,
   };
 
   const req = https.request(options, (res) => {
@@ -125,6 +132,12 @@ function upload(args) {
         process.exit(1);
       }
     });
+  });
+
+  req.on('timeout', () => {
+    req.destroy();
+    console.error(`COS upload timed out after ${timeoutMs}ms. Use --timeout <ms> to extend for large files.`);
+    process.exit(1);
   });
 
   req.on('error', (err) => {
@@ -144,7 +157,7 @@ function main() {
   if (missing.length) {
     console.error(`Missing required arguments: ${missing.map((k) => `--${k}`).join(', ')}`);
     console.error(
-      `Usage: node cos-upload.cjs --file <path> --secret-id <sid> --secret-key <skey> --token <token> --bucket <bucket> --region <region> --cos-key <key> [--content-type <mime>] [--start-time <ts>] [--expired-time <ts>]`,
+      `Usage: node cos-upload.cjs --file <path> --secret-id <sid> --secret-key <skey> --token <token> --bucket <bucket> --region <region> --cos-key <key> [--content-type <mime>] [--start-time <ts>] [--expired-time <ts>] [--timeout <ms>]`,
     );
     process.exit(1);
   }

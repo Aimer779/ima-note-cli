@@ -1,5 +1,7 @@
 # 批次 C 详细实现计划：URL、上传和 CLI 重构
 
+> 阶段 6 注：当时的 intake 路径 `ima-skills-1.1.7 (1)` 已按原始 bytes 归档为 `third_party/ima-skills/1.1.7/original`；下文旧路径只表示历史基线。当前唯一规范契约为 `docs/IMA_OPENAPI_CONTRACT_1_1_7.md`。
+
 > 编制日期：2026-07-12  
 > 对应总计划：OPTIMIZATION_PLAN.md 的阶段 3 中用户 URL 检测与下载再上传、阶段 4、阶段 5  
 > 实施基线：批次 A/B 已实施，当前 `uv run python -m unittest discover -s tests -v` 为 103/103 通过  

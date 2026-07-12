@@ -1,5 +1,7 @@
 # 批次 B 详细实现计划：公共基础与原文能力
 
+> 阶段 6 注：当时的 intake 路径 `ima-skills-1.1.7 (1)` 已按原始 bytes 归档为 `third_party/ima-skills/1.1.7/original`；下文旧路径只表示历史基线。当前唯一规范契约为 `docs/IMA_OPENAPI_CONTRACT_1_1_7.md`。
+
 > 编制日期：2026-07-11  
 > 对应总计划：`OPTIMIZATION_PLAN.md` 的阶段 2，以及阶段 3 中的 `get_media_info`、原文读取/导出和 Notes 跨模块读取  
 > 实施基线：批次 A 已实施，`uv run python -m unittest discover -s tests -v` 为 66/66 通过  
