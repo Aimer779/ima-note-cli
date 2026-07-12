@@ -35,7 +35,7 @@ def emit_json_success(
         "warnings": _warnings([*warnings, *payload_warnings]),
         **result,
     }
-    print(json.dumps(result, ensure_ascii=False, indent=2), file=stream or sys.stdout)
+    print(json.dumps(result, ensure_ascii=True, indent=2), file=stream or sys.stdout)
 
 
 def emit_json_error(command: str, error: ImaCliError, *, stream: TextIO | None = None) -> None:
@@ -46,7 +46,7 @@ def emit_json_error(command: str, error: ImaCliError, *, stream: TextIO | None =
         "warnings": [],
         "error": error.to_error_dict(),
     }
-    print(json.dumps(result, ensure_ascii=False, indent=2), file=stream or sys.stdout)
+    print(json.dumps(result, ensure_ascii=True, indent=2), file=stream or sys.stdout)
 
 
 def emit_human_error(error: ImaCliError, *, stream: TextIO | None = None) -> None:
@@ -73,7 +73,7 @@ def emit_command_result(
         }
         if result.error is not None:
             document["error"] = result.error.to_error_dict()
-        print(json.dumps(document, ensure_ascii=False, indent=2), file=out)
+        print(json.dumps(document, ensure_ascii=True, indent=2), file=out)
     else:
         for line in result.human_lines:
             print(line, file=out)

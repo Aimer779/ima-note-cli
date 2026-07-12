@@ -186,8 +186,12 @@ class KnowledgeBaseApiClient(ImaApiClient):
         kb_id = _non_empty(knowledge_base_id, "knowledge_base_id")
         data = self.post_read_json(endpoint, {"query": query, "knowledge_base_id": kb_id, "cursor": cursor})
         entries = require_array(data, "info_list", endpoint)
+        if "is_end" not in data and "next_cursor" not in data:
+            next_cursor, is_end = "", True
+        else:
+            next_cursor, is_end = optional_string(data, "next_cursor", endpoint), require_bool(data, "is_end", endpoint)
         return {"items": [self._parse_entry(v, endpoint, f"data.info_list[{i}]") for i, v in enumerate(entries)],
-                "next_cursor": optional_string(data, "next_cursor", endpoint), "is_end": require_bool(data, "is_end", endpoint),
+                "next_cursor": next_cursor, "is_end": is_end,
                 "query": query, "knowledge_base_id": kb_id}
 
     def add_note(self, knowledge_base_id: str, note_id: str, *, title: str, folder_id: str | None = None) -> dict[str, Any]:

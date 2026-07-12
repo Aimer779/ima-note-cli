@@ -74,7 +74,7 @@ def validate_media_source_url(value: str) -> str:
         pass
     else:
         raise InputError("Media source URL cannot use an IP address.", code="unsafe_media_url")
-    allowed = host == "ima.qq.com" or host.endswith(".myqcloud.com")
+    allowed = host in {"ima.qq.com", "mp.weixin.qq.com"} or host.endswith(".myqcloud.com")
     if (
         parsed.scheme != "https"
         or not allowed

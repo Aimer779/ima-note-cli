@@ -87,7 +87,10 @@ class SourceHttpClient:
 
     def _open(self, access: MediaAccessInfo) -> Any:
         validate_media_source_url(access.url)
-        req = request.Request(access.url, method="GET", headers=dict(access.headers))
+        headers = dict(access.headers)
+        if safe_url_host(access.url) == "mp.weixin.qq.com" and not any(name.lower() == "user-agent" for name in headers):
+            headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36"
+        req = request.Request(access.url, method="GET", headers=headers)
         try:
             return self._opener(req, timeout=self._timeout)
         except MediaUnavailableError:

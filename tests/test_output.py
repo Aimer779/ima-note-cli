@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from io import StringIO
+from io import BytesIO, StringIO, TextIOWrapper
 import json
 import unittest
 
@@ -22,3 +22,10 @@ class OutputTests(unittest.TestCase):
         self.assertFalse(result["ok"])
         self.assertEqual(result["error"]["exit_code"], 2)
 
+    def test_json_is_safe_on_ascii_only_windows_streams(self) -> None:
+        raw = BytesIO()
+        stream = TextIOWrapper(raw, encoding="ascii")
+        emit_json_success("kb.read", {"content": "正文 😀"}, [], stream=stream)
+        stream.flush()
+        result = json.loads(raw.getvalue().decode("ascii"))
+        self.assertEqual(result["content"], "正文 😀")

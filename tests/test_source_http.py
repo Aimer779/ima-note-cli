@@ -39,6 +39,16 @@ class SourceHttpTests(unittest.TestCase):
         self.assertNotIn("ima-openapi-clientid", headers)
         self.assertNotIn("ima-openapi-apikey", headers)
 
+    def test_wechat_source_uses_browser_user_agent_without_credentials(self) -> None:
+        calls = []
+        access = MediaAccessInfo("https://mp.weixin.qq.com/s/test", {}, "mp.weixin.qq.com", ())
+        SourceHttpClient(opener=lambda req, timeout: calls.append(req) or Response(b"article")).read_text(access)
+        headers = {key.lower(): value for key, value in calls[0].header_items()}
+        self.assertTrue(headers["user-agent"].startswith("Mozilla/5.0"))
+        self.assertNotIn("authorization", headers)
+        self.assertNotIn("ima-openapi-clientid", headers)
+        self.assertNotIn("ima-openapi-apikey", headers)
+
     def test_binary_and_size_limits(self) -> None:
         with self.assertRaisesRegex(MediaUnavailableError, "export"):
             SourceHttpClient(opener=lambda *_args, **_kwargs: Response(b"x", "application/octet-stream")).read_text(self.access())

@@ -77,6 +77,15 @@ class KnowledgeContractTests(unittest.TestCase):
         self.assertEqual(client.search_knowledge("x", "kb_test_1")["items"][0].media_id, "media_test_1")
         self.assertEqual(client.list_addable_knowledge_bases(50)["knowledge_bases"][0].name, "Test KB")
 
+    def test_search_knowledge_accepts_observed_single_page_shape(self) -> None:
+        client = RecordingKnowledgeClient({"search_knowledge": {"info_list": []}})
+        result = client.search_knowledge("test", "kb_test_1")
+        self.assertEqual((result["items"], result["next_cursor"], result["is_end"]), ([], "", True))
+
+        incomplete = RecordingKnowledgeClient({"search_knowledge": {"info_list": [], "next_cursor": "next"}})
+        with self.assertRaises(ApiProtocolError):
+            incomplete.search_knowledge("test", "kb_test_1")
+
     def test_write_contract_fixtures_and_limits(self) -> None:
         client = self.client({
             "import_urls": "import_urls_partial_success.json",

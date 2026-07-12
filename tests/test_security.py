@@ -22,5 +22,6 @@ class SecurityTests(unittest.TestCase):
     def test_media_url_allowlist(self) -> None:
         validate_media_source_url("https://ima.qq.com/test")
         validate_media_source_url("https://bucket.cos.ap-test.myqcloud.com/path")
-        for value in ["http://ima.qq.com/x", "https://localhost/x", "https://127.0.0.1/x", "https://evilmyqcloud.com/x"]:
+        validate_media_source_url("https://mp.weixin.qq.com/s/example")
+        for value in ["http://ima.qq.com/x", "https://localhost/x", "https://127.0.0.1/x", "https://evilmyqcloud.com/x", "https://evil.mp.weixin.qq.com/x"]:
             with self.assertRaises(InputError): validate_media_source_url(value)
