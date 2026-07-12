@@ -3,7 +3,11 @@ from __future__ import annotations
 from collections.abc import Mapping
 import ipaddress
 import re
-from urllib.parse import urlsplit
+from dataclasses import dataclass, field
+from socket import AF_UNSPEC, SOCK_STREAM, getaddrinfo
+from time import time
+from typing import Callable, Iterable
+from urllib.parse import urlsplit, urlunsplit
 
 from .errors import InputError
 
@@ -101,6 +105,98 @@ def sanitize_header_map(headers: Mapping[object, object]) -> dict[str, str]:
 
 def safe_url_host(value: str) -> str:
     return (urlsplit(value).hostname or "").lower()
+
+
+@dataclass(frozen=True)
+class PublicUrlTarget:
+    url: str = field(repr=False)
+    safe_url: str
+    scheme: str
+    host: str
+    port: int
+    path_and_query: str = field(repr=False)
+    addresses: tuple[str, ...]
+
+
+def safe_url(value: str) -> str:
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+    except (TypeError, ValueError):
+        return "<invalid-url>"
+    host = (parsed.hostname or "").lower()
+    if not host:
+        return "<invalid-url>"
+    netloc = host if port is None else f"{host}:{port}"
+    return urlunsplit((parsed.scheme.lower(), netloc, parsed.path or "/", "", ""))
+
+
+def validate_public_url(
+    value: str,
+    *,
+    resolver: Callable[..., Iterable[tuple[object, object, object, object, tuple[object, ...]]]] = getaddrinfo,
+) -> PublicUrlTarget:
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+    except (TypeError, ValueError) as exc:
+        raise InputError("Public URL is invalid.", code="unsafe_public_url") from exc
+    scheme = parsed.scheme.lower()
+    host = (parsed.hostname or "").lower().rstrip(".")
+    expected_port = 443 if scheme == "https" else 80
+    if _CONTROL.search(value) or scheme not in {"http", "https"} or not host:
+        raise InputError("Only public HTTP(S) URLs are supported.", code="unsafe_public_url")
+    if parsed.username is not None or parsed.password is not None:
+        raise InputError("Public URL cannot contain user information.", code="unsafe_public_url")
+    if port not in (None, expected_port):
+        raise InputError("Public URL must use its default port.", code="unsafe_public_url")
+    if host == "localhost" or host.endswith(".localhost") or not _valid_host(host):
+        raise InputError("Public URL host is not allowed.", code="unsafe_public_url")
+    try:
+        ipaddress.ip_address(host)
+    except ValueError:
+        pass
+    else:
+        raise InputError("Public URL cannot use an IP address.", code="unsafe_public_url")
+    try:
+        infos = resolver(host, expected_port, AF_UNSPEC, SOCK_STREAM)
+    except OSError as exc:
+        raise InputError("Public URL host could not be resolved.", code="public_url_dns_failed", retryable=True) from exc
+    addresses = tuple(dict.fromkeys(str(info[4][0]) for info in infos))
+    if not addresses:
+        raise InputError("Public URL host did not resolve to an address.", code="public_url_dns_failed", retryable=True)
+    for address in addresses:
+        try:
+            ip = ipaddress.ip_address(address)
+        except ValueError as exc:
+            raise InputError("Public URL resolved to an invalid address.", code="unsafe_public_url") from exc
+        if not ip.is_global:
+            raise InputError("Public URL resolved to a non-public address.", code="unsafe_public_url")
+    path = parsed.path or "/"
+    query = f"?{parsed.query}" if parsed.query else ""
+    normalized = urlunsplit((scheme, host, path, parsed.query, ""))
+    return PublicUrlTarget(normalized, safe_url(normalized), scheme, host, expected_port, path + query, addresses)
+
+
+def validate_cos_key(value: str) -> str:
+    if not isinstance(value, str) or not value or _CONTROL.search(value) or "\\" in value:
+        raise InputError("COS object key is invalid.", code="unsafe_cos_key")
+    if value.startswith(("/", "http://", "https://")) or "?" in value or "#" in value:
+        raise InputError("COS object key is invalid.", code="unsafe_cos_key")
+    segments = value.split("/")
+    if any(segment in {"", ".", ".."} for segment in segments):
+        raise InputError("COS object key is invalid.", code="unsafe_cos_key")
+    return value
+
+
+def validate_cos_credential_times(start_time: int, expired_time: int, *, now: int | None = None, minimum_remaining: int = 60) -> None:
+    current = int(time()) if now is None else now
+    if start_time >= expired_time:
+        raise InputError("COS credential time range is invalid.", code="invalid_cos_credential")
+    if start_time > current + 30:
+        raise InputError("COS credential is not active yet.", code="invalid_cos_credential")
+    if expired_time - current < minimum_remaining:
+        raise InputError("COS credential expires too soon.", code="invalid_cos_credential")
 
 
 def redact_sensitive_text(value: object) -> str:

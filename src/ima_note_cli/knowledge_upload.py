@@ -3,10 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from hashlib import sha1
 import hmac
+import os
 from pathlib import Path
 from time import time
 from typing import Any
 from urllib import error, parse, request
+import wave
 
 from .errors import InputError, KnowledgeUploadError
 from .knowledge_api import CosCredential
@@ -62,6 +64,7 @@ UNSUPPORTED_VIDEO_CT = {
     "video/x-flv",
     "video/webm",
 }
+WINDOWS_RESERVED_NAMES = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))}
 
 
 @dataclass(frozen=True)
@@ -73,6 +76,9 @@ class UploadFileInfo:
     media_type: int
     content_type: str
     last_modify_time: int
+    device: int = 0
+    inode: int = 0
+    mtime_ns: int = 0
 
 
 def inspect_upload_file(file_path: str, *, content_type: str | None = None) -> UploadFileInfo:
@@ -80,6 +86,9 @@ def inspect_upload_file(file_path: str, *, content_type: str | None = None) -> U
     if not path.is_file():
         raise InputError(f"File not found: {file_path}")
 
+    if (len(path.name) > 1024 or Path(path.name).stem.upper() in WINDOWS_RESERVED_NAMES
+            or any(ord(char) < 32 or char in '<>:"/\\|?*' for char in path.name)):
+        raise InputError("Filename is unsafe or exceeds 1024 characters.", code="unsafe_filename")
     ext = path.suffix[1:].lower() if path.suffix else ""
     provided_content_type = (content_type or "").strip().lower()
     if ext in UNSUPPORTED_VIDEO_EXT or provided_content_type in UNSUPPORTED_VIDEO_CT:
@@ -106,11 +115,21 @@ def inspect_upload_file(file_path: str, *, content_type: str | None = None) -> U
         resolved_media_type, resolved_content_type = mapping
 
     stat = path.stat()
+    if stat.st_size == 0:
+        raise InputError("Empty files are not supported.", code="empty_file")
     size_limit = SIZE_LIMITS.get(resolved_media_type, DEFAULT_SIZE_LIMIT)
     if stat.st_size > size_limit:
         raise InputError(
             f"File size {format_size(stat.st_size)} exceeds the {format_size(size_limit)} limit for this file type."
         )
+    if ext == "wav":
+        try:
+            with wave.open(str(path), "rb") as audio:
+                duration = audio.getnframes() / audio.getframerate()
+        except (wave.Error, EOFError, ZeroDivisionError) as exc:
+            raise InputError("WAV file is invalid.", code="invalid_wav") from exc
+        if duration > 2 * 60 * 60:
+            raise InputError("WAV audio duration exceeds 2 hours.", code="audio_too_long")
 
     return UploadFileInfo(
         file_path=path,
@@ -120,56 +139,35 @@ def inspect_upload_file(file_path: str, *, content_type: str | None = None) -> U
         media_type=resolved_media_type,
         content_type=resolved_content_type or provided_content_type,
         last_modify_time=int(stat.st_mtime),
+        device=stat.st_dev,
+        inode=stat.st_ino,
+        mtime_ns=stat.st_mtime_ns,
     )
 
 
-def upload_to_cos(file_info: UploadFileInfo, credential: CosCredential, *, timeout: int = 120) -> None:
-    file_content = file_info.file_path.read_bytes()
-    origin = build_and_validate_cos_origin(credential.bucket_name, credential.region)
-    hostname = parse.urlsplit(origin).hostname or ""
-    pathname = f"/{credential.cos_key}"
+def upload_to_cos(file_info: UploadFileInfo, credential: CosCredential, *, timeout: int = 300) -> None:
+    from .cos_http import CosHttpClient, build_cos_target
+
+    target = build_cos_target(credential)
+    hostname = target.host
+    pathname = target.pathname
     authorization = build_cos_authorization(
         secret_id=credential.secret_id,
         secret_key=credential.secret_key,
         method="PUT",
         pathname=pathname,
         headers={
-            "content-length": str(len(file_content)),
+            "content-length": str(file_info.file_size),
             "host": hostname,
         },
         start_time=credential.start_time or int(time()),
         expired_time=credential.expired_time or int(time()) + 3600,
     )
-    req = request.Request(
-        f"{origin}{pathname}",
-        data=file_content,
-        method="PUT",
-        headers={
-            "Content-Type": file_info.content_type,
-            "Content-Length": str(len(file_content)),
-            "Authorization": authorization,
-            "x-cos-security-token": credential.token,
-        },
-    )
-    try:
-        with request.urlopen(req, timeout=timeout) as response:
-            status_code = getattr(response, "status", response.getcode())
-    except error.HTTPError as exc:
-        try:
-            exc.read(16 * 1024)
-        except Exception:
-            pass
-        finally:
-            try:
-                exc.close()
-            except Exception:
-                pass
-        raise KnowledgeUploadError(f"COS upload failed with HTTP {exc.code}.", details={"http_status": exc.code}) from exc
-    except error.URLError as exc:
-        raise KnowledgeUploadError("COS upload could not reach the target host.", retryable=True) from exc
-
-    if not 200 <= status_code < 300:
-        raise KnowledgeUploadError(f"COS upload failed with unexpected status {status_code}.")
+    with file_info.file_path.open("rb") as stream:
+        CosHttpClient().put(
+            stream, size=file_info.file_size, content_type=file_info.content_type,
+            credential=credential, authorization=authorization, timeout=timeout, target=target,
+        )
 
 
 def build_file_info_payload(file_info: UploadFileInfo, credential: CosCredential) -> dict[str, Any]:

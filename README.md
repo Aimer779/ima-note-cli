@@ -402,3 +402,10 @@ ima-note-cli/
 ├── uv.lock                     # uv 锁文件，固定依赖解析结果
 └── README.md                   # 项目说明、安装方式和使用文档
 ```
+# Batch C URL ingestion, uploads, and pagination
+
+`ima kb add-url` now probes public HTTP(S) targets without forwarding IMA or COS credentials. HTML and WeChat articles use IMA URL import; supported remote files are downloaded with a 200 MiB absolute bound and passed through the same upload state machine as local files. Private, loopback, link-local, literal-IP, userinfo, non-default-port, Bilibili, YouTube, and unknown targets are rejected.
+
+Local uploads accept repeated `--file`, default to `--on-conflict error`, and support explicit `--on-conflict rename`. Downloads and uploads default to 300-second timeouts (`--download-timeout` and `--upload-timeout`, range 1–3600). Files are streamed in chunks and rechecked before and after COS transfer.
+
+List/search commands support `--all --max-pages 100` while retaining single-page defaults. A page cap produces a partial result. Batch partial/failed results exit with code 9; JSON remains one stdout document and includes `status`, `summary`, per-item `stage`, and safe errors.

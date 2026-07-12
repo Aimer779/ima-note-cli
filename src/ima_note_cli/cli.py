@@ -1,9 +1,6 @@
 from __future__ import annotations
 
 import argparse
-from contextlib import redirect_stderr, redirect_stdout
-from io import StringIO
-import json
 import os
 from pathlib import Path
 import sys
@@ -12,12 +9,18 @@ from typing import Sequence
 from .config import CredentialStatus, Credentials, inspect_credentials, load_credentials
 from .errors import ConfigError, ImaCliError, InputError
 from .knowledge_api import KnowledgeBaseApiClient
-from .knowledge_cli import add_kb_subcommands, handle_kb_command
+from .knowledge_cli import add_kb_subcommands
 from .media_service import MediaContentService
 from .notes_api import NotesApiClient
-from .notes_cli import add_note_subcommands, handle_note_command
-from .output import emit_human_error, emit_json_error, emit_json_success
+from .notes_cli import add_note_subcommands
+from .output import emit_command_result, emit_human_error, emit_json_error
 from .source_http import SourceHttpClient
+from .command_result import CommandResult
+from .commands.notes import execute as execute_note
+from .commands.knowledge import execute as execute_knowledge
+from .upload_service import UploadService
+from .url_ingest import UrlIngestService
+from .validation import validate_max_pages, validate_timeout
 
 
 class CliArgumentParser(argparse.ArgumentParser):
@@ -51,14 +54,22 @@ def run(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     try:
         args = parser.parse_args(argv_list)
+        if hasattr(args, "max_pages"):
+            validate_max_pages(args.max_pages)
+        if hasattr(args, "download_timeout"):
+            validate_timeout(args.download_timeout, "--download-timeout")
+        if hasattr(args, "upload_timeout"):
+            validate_timeout(args.upload_timeout, "--upload-timeout")
         command_name = _command_name_from_args(args)
         status = inspect_credentials(Path.cwd())
         if args.command == "auth":
             if not status.is_configured:
                 if not as_json:
-                    return handle_auth(status, False)
+                    result = auth_result(status)
+                    emit_command_result(command_name, result, as_json=False)
+                    return 3
                 raise ConfigError("IMA credentials are not fully configured.")
-            return _run_handler(lambda: handle_auth(status, args.as_json), command_name, as_json)
+            return emit_command_result(command_name, auth_result(status), as_json=as_json)
 
         if not status.is_configured:
             raise ConfigError("IMA credentials are not fully configured.")
@@ -67,13 +78,16 @@ def run(argv: Sequence[str] | None = None) -> int:
             status.client_id_source or "unknown", status.api_key_source or "unknown",
         )
         if args.command == "note":
-            return _run_handler(lambda: handle_note_command(args, NotesApiClient(credentials)), command_name, as_json)
+            return emit_command_result(command_name, execute_note(args, NotesApiClient(credentials)), as_json=as_json)
         if args.command == "kb":
             knowledge = KnowledgeBaseApiClient(credentials)
             media_service = None
             if args.kb_action in {"media-info", "read", "export"}:
                 media_service = MediaContentService(knowledge, NotesApiClient(credentials), SourceHttpClient())
-            return _run_handler(lambda: handle_kb_command(args, knowledge, media_service), command_name, as_json)
+            upload = UploadService(knowledge)
+            url_service = UrlIngestService(knowledge, upload)
+            result = execute_knowledge(args, knowledge, media_service=media_service, upload_service=upload, url_service=url_service)
+            return emit_command_result(command_name, result, as_json=as_json)
         raise InputError("Unknown command.")
     except KeyboardInterrupt:
         error = ImaCliError("Interrupted.", code="interrupted", exit_code=130)
@@ -86,25 +100,6 @@ def run(argv: Sequence[str] | None = None) -> int:
     else:
         emit_human_error(error)
     return error.exit_code
-
-
-def _run_handler(callback: object, command: str, as_json: bool) -> int:
-    if not as_json:
-        return callback()  # type: ignore[operator]
-    stdout, stderr = StringIO(), StringIO()
-    with redirect_stdout(stdout), redirect_stderr(stderr):
-        exit_code = callback()  # type: ignore[operator]
-    if exit_code:
-        raise ImaCliError("The command failed without a classified error.", code="internal_error", exit_code=70)
-    raw = stdout.getvalue().strip()
-    try:
-        payload = json.loads(raw) if raw else {}
-    except json.JSONDecodeError as exc:
-        raise ImaCliError("The command produced invalid internal JSON.", code="internal_error", exit_code=70) from exc
-    if not isinstance(payload, dict):
-        raise ImaCliError("The command produced invalid internal JSON.", code="internal_error", exit_code=70)
-    emit_json_success(command, payload)
-    return 0
 
 
 def _command_name(argv: Sequence[str]) -> str:
@@ -131,7 +126,7 @@ def run_note_legacy(argv: Sequence[str] | None = None) -> int:
     return run(["note", *argv_list])
 
 
-def handle_auth(status: CredentialStatus, as_json: bool) -> int:
+def auth_result(status: CredentialStatus) -> CommandResult:
     environment_check = inspect_runtime_environment()
     payload = {
         "configured": status.is_configured,
@@ -148,29 +143,21 @@ def handle_auth(status: CredentialStatus, as_json: bool) -> int:
         "environment_check": environment_check,
     }
 
-    if as_json:
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
-        return 0
-
-    print(f"Status: {'configured' if status.is_configured else 'missing credentials'}")
-    print(
+    lines = [f"Status: {'configured' if status.is_configured else 'missing credentials'}"]
+    lines.append(
         "IMA_OPENAPI_CLIENTID: "
         f"{'set' if status.client_id else 'missing'}"
         f"{format_source_suffix(status.client_id_source)}"
     )
-    print(
+    lines.append(
         "IMA_OPENAPI_APIKEY: "
         f"{'set' if status.api_key else 'missing'}"
         f"{format_source_suffix(status.api_key_source)}"
     )
-    print_environment_check(environment_check)
-
-    if status.is_configured:
-        return 0
-
-    print()
-    print("Configure the missing values in the environment, project .env, or ~/.config/ima files.", file=sys.stderr)
-    return 3
+    if environment_check["platform"] == "windows" and not environment_check["ok"]:
+        lines.extend(environment_check_lines(environment_check))
+    warnings = () if status.is_configured else ("Configure the missing values in the environment, project .env, or ~/.config/ima files.",)
+    return CommandResult(payload, tuple(lines), warnings)
 
 
 def format_source_suffix(source: str | None) -> str:
@@ -215,21 +202,17 @@ def detect_windows_shell() -> str:
     return "unknown"
 
 
-def print_environment_check(environment_check: dict[str, object]) -> None:
-    if environment_check["platform"] != "windows" or environment_check["ok"]:
-        return
+def environment_check_lines(environment_check: dict[str, object]) -> list[str]:
+    lines = ["", "Environment: warning", "Windows terminal encoding may cause garbled output."]
+    if environment_check["shell"] == "powershell":
+        lines.append('Set PowerShell session variables: `$env:PYTHONUTF8="1"` and `$env:PYTHONIOENCODING="utf-8"`')
+    elif environment_check["shell"] == "cmd":
+        lines.append("Or in CMD: `set PYTHONUTF8=1` and `set PYTHONIOENCODING=utf-8`")
+    else:
+        lines.extend(['Set PowerShell session variables: `$env:PYTHONUTF8="1"` and `$env:PYTHONIOENCODING="utf-8"`', "Or in CMD: `set PYTHONUTF8=1` and `set PYTHONIOENCODING=utf-8`"])
+    return lines
 
-    print()
-    print("Environment: warning")
-    print("Windows terminal encoding may cause garbled output.")
 
-    shell_name = environment_check["shell"]
-    if shell_name == "powershell":
-        print('Set PowerShell session variables: `$env:PYTHONUTF8="1"` and `$env:PYTHONIOENCODING="utf-8"`')
-        return
-    if shell_name == "cmd":
-        print("Or in CMD: `set PYTHONUTF8=1` and `set PYTHONIOENCODING=utf-8`")
-        return
-
-    print('Set PowerShell session variables: `$env:PYTHONUTF8="1"` and `$env:PYTHONIOENCODING="utf-8"`')
-    print("Or in CMD: `set PYTHONUTF8=1` and `set PYTHONIOENCODING=utf-8`")
+def handle_auth(status: CredentialStatus, as_json: bool) -> int:
+    """Compatibility façade for callers that used the pre-batch-C handler."""
+    return emit_command_result("auth", auth_result(status), as_json=as_json)

@@ -54,3 +54,8 @@ Knowledge 与媒体原文契约见 [KNOWLEDGE_MEDIA_CONTRACT_1_1_7.md](KNOWLEDGE
 ## Fixtures
 
 `tests/fixtures/notes` 使用完整 wire envelope。内容来自 1.1.7 文档建模，不是真实账户抓取；固定使用 `note_test_*`、`folder_test_*`、固定时间戳、`example.com` 和无隐私 Unicode 示例。更新契约时必须同时更新此文档、fixture、测试和活动 skill。
+# Batch C addendum
+
+Command handlers return `CommandResult`; the output layer is the only JSON renderer. JSON schema version remains 1 and adds `status` (`success`, `empty`, `partial`, `failed`), `summary`, `pagination`, and per-item `stage`. Partial and fully itemized batch failure use exit code 9 and retain usable item results.
+
+`import_urls` results are correlated to requested URLs in request order. Non-zero `ret_code` is an item failure. Uploads check all initial names before `create_media`; the final conflict-resolved name is used consistently for `create_media.file_name`, `file_info.file_name`, and `add_knowledge.title`.

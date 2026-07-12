@@ -571,12 +571,14 @@ class CliTests(unittest.TestCase):
         self.assertEqual(parsed["items"][0]["item_id"], "media-1")
 
     def test_kb_add_url_passes_urls_to_client(self) -> None:
+        from ima_note_cli.knowledge_api import ImportUrlResult
+        from ima_note_cli.remote_http import RemoteResponseInfo
         stdout = io.StringIO()
-        fake_client = FakeKnowledgeClient(import_urls_result={"results": [], "knowledge_base_id": "kb-1", "folder_id": ""})
+        fake_client = FakeKnowledgeClient(import_urls_result={"results": [ImportUrlResult("https://example.com/article", 0, "media-1")], "knowledge_base_id": "kb-1", "folder_id": ""})
 
         with patch("ima_note_cli.cli.inspect_credentials", return_value=self._configured_status()):
             with patch("ima_note_cli.cli.load_credentials", return_value=self._configured_credentials()):
-                with patch("ima_note_cli.cli.KnowledgeBaseApiClient", return_value=fake_client):
+                with patch("ima_note_cli.cli.KnowledgeBaseApiClient", return_value=fake_client), patch("ima_note_cli.url_ingest.RemoteHttpClient.probe", return_value=RemoteResponseInfo("https://example.com/article", "https://example.com/article", 200, {"content-type": "text/html"}, "HEAD")):
                     with redirect_stdout(stdout):
                         code = run(["kb", "add-url", "--kb-id", "kb-1", "--url", "https://example.com/article"])
 

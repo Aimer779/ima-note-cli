@@ -208,8 +208,11 @@ class KnowledgeBaseApiClient(ImaApiClient):
         endpoint = "import_urls"
         data = self.post_write_json(endpoint, {"knowledge_base_id": kb_id, "folder_id": folder_id or kb_id, "urls": urls})
         raw = require_object(data, "results", endpoint)
+        if not set(urls).issubset(raw):
+            raise ApiProtocolError("IMA API import_urls result URLs did not match the request.", endpoint=endpoint, details={"field": "data.results"})
         results = []
-        for index, (url, info) in enumerate(raw.items()):
+        for index, url in enumerate(urls):
+            info = raw[url]
             if not isinstance(url, str) or not isinstance(info, dict):
                 raise ApiProtocolError("IMA API import_urls returned an invalid result.", endpoint=endpoint, details={"field": "data.results"})
             path = f"data.results[{index}]"
@@ -232,6 +235,12 @@ class KnowledgeBaseApiClient(ImaApiClient):
             if not isinstance(item, dict):
                 raise ApiProtocolError("IMA API check_repeated_names returned an invalid result.", endpoint=endpoint, details={"field": f"data.results[{i}]"})
             results.append(RepeatedNameResult(require_non_empty_string(item, "name", endpoint, f"data.results[{i}]"), require_bool(item, "is_repeated", endpoint, f"data.results[{i}]")))
+        requested_names = [item.get("name") for item in params]
+        returned_names = [item.name for item in results]
+        if len(set(returned_names)) != len(returned_names) or set(returned_names) != set(requested_names):
+            raise ApiProtocolError("IMA API repeated-name results did not match the request.", endpoint=endpoint, details={"field": "data.results"})
+        by_name = {item.name: item for item in results}
+        results = [by_name[name] for name in requested_names]
         return results
 
     def create_media(self, knowledge_base_id: str, *, file_name: str, file_size: int, content_type: str, file_ext: str) -> dict[str, Any]:

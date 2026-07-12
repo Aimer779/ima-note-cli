@@ -14,6 +14,7 @@ class ExitCode(IntEnum):
     PROTOCOL = 6
     LOCAL_IO = 7
     UPLOAD = 8
+    PARTIAL = 9
     INTERNAL = 70
     INTERRUPTED = 130
 
@@ -111,3 +112,8 @@ class LocalIOError(ImaCliError):
 class KnowledgeUploadError(ImaCliError):
     default_code = "knowledge_upload_error"
     default_exit_code = ExitCode.UPLOAD
+
+
+class RemoteFetchError(ImaCliError):
+    default_code = "remote_fetch_error"
+    default_exit_code = ExitCode.TRANSPORT

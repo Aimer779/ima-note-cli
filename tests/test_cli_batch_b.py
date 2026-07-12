@@ -81,7 +81,7 @@ class CliBatchBTests(unittest.TestCase):
             self.assertEqual(payload["bytes"], len("# CLI body".encode()))
 
     def test_add_url_validation_never_echoes_signed_url(self) -> None:
-        signed = "https://ima.qq.com/report.pdf?token=TOP_SECRET"
+        signed = "file:///TOP_SECRET"
         with self.assertRaises(InputError) as caught:
             validate_urls([signed])
         self.assertNotIn(signed, str(caught.exception)); self.assertNotIn("TOP_SECRET", str(caught.exception))

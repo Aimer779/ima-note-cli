@@ -28,3 +28,6 @@
 6. URL 是否发生跨 host 重定向。
 
 任何新 host 都必须先确认官方所有权并补 fixture/allowlist；不得把真实响应、ID、签名或正文写入测试。
+# User URL boundary (Batch C)
+
+User-provided URLs use `RemoteHttpClient`, not the trusted-media `SourceHttpClient`. The remote client sends no IMA/COS credentials or cookies, disables proxy-mediated routing by using direct pinned-IP connections, validates every redirect, and redacts query, fragment, and userinfo from output. Download bodies are streamed with header and read-time limits into an automatically cleaned temporary directory.

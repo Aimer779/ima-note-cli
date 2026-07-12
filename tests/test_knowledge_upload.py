@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from time import time
 from unittest.mock import patch
 from urllib import error
 from email.message import Message
@@ -66,7 +67,8 @@ class KnowledgeUploadTests(unittest.TestCase):
         with TemporaryDirectory() as tmp_dir:
             path = Path(tmp_dir) / "note.md"; path.write_text("x", encoding="utf-8")
             info = inspect_upload_file(str(path))
-            credential = CosCredential("token", "sid", "key", 100, 200, "app", "bucket-test", "ap-test", "", "path")
+            now = int(time())
+            credential = CosCredential("token", "sid", "key", now - 10, now + 3600, "app", "bucket-test", "ap-test", "", "path")
             failure = error.HTTPError("https://bucket-test.cos.ap-test.myqcloud.com/path", 500, "bad", Message(), BrokenBody())
             with patch("ima_note_cli.knowledge_upload.request.urlopen", side_effect=failure):
                 from ima_note_cli.knowledge_upload import KnowledgeUploadError

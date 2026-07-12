@@ -186,3 +186,9 @@ Legacy note compatibility:
   - Or in CMD: `set PYTHONUTF8=1` and `set PYTHONIOENCODING=utf-8`
   - Retry with a minimal command such as `ima note search "coding"`
 - If the user wants the UTF-8 behavior to persist on Windows, suggest `setx PYTHONUTF8 "1"` and `setx PYTHONIOENCODING "utf-8"`, then tell them to open a new terminal.
+# Batch C behavior
+
+- `ima kb add-url` classifies public web and supported file URLs. Never suggest bypassing the SSRF checks.
+- `ima kb add-file --file PATH` may repeat; conflict policy is `error` unless `--on-conflict rename` is explicit.
+- Use `--all --max-pages N` for bounded multi-page retrieval.
+- Exit code 9 means itemized partial/failed batch output is available; inspect `results` and `stage`.
